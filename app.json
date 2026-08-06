@@ -1,0 +1,83 @@
+{
+  "expo": {
+    "name": "Threadline",
+    "slug": "threadline",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "threadline",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EFEDE6"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fashionista.threadline",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Threadline uses the camera to photograph clothing so it can be cut out and added to your closet.",
+        "NSPhotoLibraryUsageDescription": "Threadline reads photos you choose so you can add existing clothing pictures to your closet.",
+        "NSLocationWhenInUseUsageDescription": "Threadline checks your local forecast so outfit suggestions suit the weather.",
+        "NSCalendarsFullAccessUsageDescription": "Threadline reads upcoming event titles to suggest outfits for what you have on."
+      }
+    },
+    "android": {
+      "package": "com.yourcompany.threadline",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EFEDE6"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CALENDAR",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WRITE_CALENDAR"
+      ],
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-camera",
+      "expo-location",
+      "expo-calendar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2B3A7E"
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1
+          },
+          "androidIntentFilters": [
+            "text/*"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://threadline-api.theapp-threadline.workers.dev",
+      "eas": {
+        "projectId": "431df291-50d0-4ec6-a697-d31fa213e82e"
+      }
+    },
+    "privacy": "public"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+ios/
+android/
+*.log
+.env
+.env.local
+server/.dev.vars
+server/node_modules/
