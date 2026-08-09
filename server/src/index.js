@@ -205,20 +205,32 @@ async function tagPhoto({ image }, env) {
 async function product({ url }) {
   if (!url || !/^https?:\/\//i.test(url)) return fail('Send a full http(s) product URL.');
 
+  // Many large retailers refuse plain bot requests, so present as a real browser.
+  const unreadable = () =>
+    json({ title: '', brand: '', description: '', price: 0, currency: '', image: null, url, blocked: true });
+
   let page;
   try {
     page = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ThreadlineBot/1.0; +https://threadline.app/bot)',
-        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
       },
       redirect: 'follow',
       cf: { cacheTtl: 300 },
     });
   } catch {
-    return fail('Could not reach that site.', 502);
+    return unreadable();
   }
-  if (!page.ok) return fail(`That page returned ${page.status}.`, 422);
+  // Blocked or missing: hand back an empty shell so the app can still infer
+  // the item from the URL slug rather than dead-ending on the user.
+  if (!page.ok) return unreadable();
 
   const found = { meta: {}, ldjson: [] };
 
@@ -275,7 +287,7 @@ async function product({ url }) {
     url: page.url,
   };
 
-  if (!result.title) return fail('That page did not expose product details.', 422);
+  if (!result.title) return unreadable();
   return json(result);
 }
 

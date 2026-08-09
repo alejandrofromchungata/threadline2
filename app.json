@@ -68,14 +68,15 @@
           },
           "androidIntentFilters": [
             "text/*"
-          ]
+          ],
+          "disableIOS": true
         }
       ]
     ],
     "extra": {
       "apiBaseUrl": "https://threadline-api.theapp-threadline.workers.dev",
       "eas": {
-        "projectId": "431df291-50d0-4ec6-a697-d31fa213e82e"
+        "projectId": "62217c40-b293-4f1e-89c4-18eb7c2145b8"
       }
     },
     "privacy": "public"
