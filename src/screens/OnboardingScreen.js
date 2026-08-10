@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Chip, Button, Stitch, Hint, Row } from '../components/ui';
+import { Button, Stitch, Hint } from '../components/ui';
+import ChipPicker from '../components/ChipPicker';
 import { setSetting } from '../db';
 import { T, STYLES, CONTEXTS } from '../theme';
 
@@ -9,6 +10,8 @@ export default function OnboardingScreen({ navigation, onDone }) {
   const [step, setStep] = useState(0);
   const [styles, setStyles] = useState([]);
   const [contexts, setContexts] = useState([]);
+  const [customStyles, setCustomStyles] = useState([]);
+  const [customContexts, setCustomContexts] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const toggle = (list, set, v) =>
@@ -16,7 +19,10 @@ export default function OnboardingScreen({ navigation, onDone }) {
 
   const finish = async (addFirst) => {
     setSaving(true);
-    await setSetting('profile', { styles, contexts, createdAt: new Date().toISOString() });
+    await setSetting('profile', {
+      styles, contexts, customStyles, customContexts,
+      createdAt: new Date().toISOString(),
+    });
     setSaving(false);
     onDone();
     if (addFirst) navigation.navigate('AddItem');
@@ -35,11 +41,19 @@ export default function OnboardingScreen({ navigation, onDone }) {
           <>
             <Text style={o.h2}>What do you actually wear?</Text>
             <Hint>Pick as many as fit. Blends are normal.</Hint>
-            <Row style={{ marginTop: 14 }}>
-              {STYLES.map((v) => (
-                <Chip key={v} label={v} active={styles.includes(v)} onPress={() => toggle(styles, setStyles, v)} />
-              ))}
-            </Row>
+            <View style={{ marginTop: 14 }}>
+              <ChipPicker
+                options={STYLES}
+                custom={customStyles}
+                selected={styles}
+                onToggle={(v) => toggle(styles, setStyles, v)}
+                onAddCustom={(v) => {
+                  setCustomStyles((c) => [...c, v]);
+                  setStyles((c) => [...c, v]);
+                }}
+                placeholder="Search styles, or add your own"
+              />
+            </View>
           </>
         )}
 
@@ -47,11 +61,19 @@ export default function OnboardingScreen({ navigation, onDone }) {
           <>
             <Text style={o.h2}>Where do you have to show up?</Text>
             <Hint>This sets the bar for what counts as appropriate.</Hint>
-            <Row style={{ marginTop: 14 }}>
-              {CONTEXTS.map((v) => (
-                <Chip key={v} label={v} active={contexts.includes(v)} onPress={() => toggle(contexts, setContexts, v)} />
-              ))}
-            </Row>
+            <View style={{ marginTop: 14 }}>
+              <ChipPicker
+                options={CONTEXTS}
+                custom={customContexts}
+                selected={contexts}
+                onToggle={(v) => toggle(contexts, setContexts, v)}
+                onAddCustom={(v) => {
+                  setCustomContexts((c) => [...c, v]);
+                  setContexts((c) => [...c, v]);
+                }}
+                placeholder="Search settings, or add your own"
+              />
+            </View>
           </>
         )}
 

@@ -2,30 +2,42 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Chip, Button, Row, Stitch, Hint, Micro } from '../components/ui';
+import { Button, Stitch, Hint, Micro } from '../components/ui';
+import ChipPicker from '../components/ChipPicker';
 import { getSetting, setSetting, wipeAll, recentFeedback } from '../db';
 import { API_BASE } from '../api';
 import { T, STYLES, CONTEXTS } from '../theme';
 
 export default function StyleScreen({ onReset }) {
-  const [profile, setProfile] = useState({ styles: [], contexts: [] });
+  const [profile, setProfile] = useState({ styles: [], contexts: [], customStyles: [], customContexts: [] });
   const [learned, setLearned] = useState([]);
 
   const load = useCallback(async () => {
-    setProfile(await getSetting('profile', { styles: [], contexts: [] }));
+    const saved = await getSetting('profile', {});
+    setProfile({ styles: [], contexts: [], customStyles: [], customContexts: [], ...saved });
     setLearned(await recentFeedback(6));
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const toggle = async (key, v) => {
-    const list = profile[key] || [];
-    const next = {
-      ...profile,
-      [key]: list.includes(v) ? list.filter((x) => x !== v) : [...list, v],
-    };
+  const save = async (next) => {
     setProfile(next);
     await setSetting('profile', next);
+  };
+
+  const toggle = (key, v) => {
+    const list = profile[key] || [];
+    save({ ...profile, [key]: list.includes(v) ? list.filter((x) => x !== v) : [...list, v] });
+  };
+
+  // A custom entry is added to the option list and selected in one go.
+  const addCustom = (key, customKey, v) => {
+    if ((profile[customKey] || []).includes(v)) return toggle(key, v);
+    save({
+      ...profile,
+      [customKey]: [...(profile[customKey] || []), v],
+      [key]: [...(profile[key] || []), v],
+    });
   };
 
   const reset = () => {
@@ -52,18 +64,24 @@ export default function StyleScreen({ onReset }) {
         </Hint>
 
         <Stitch label="STYLES" />
-        <Row>
-          {STYLES.map((s) => (
-            <Chip key={s} label={s} active={profile.styles?.includes(s)} onPress={() => toggle('styles', s)} />
-          ))}
-        </Row>
+        <ChipPicker
+          options={STYLES}
+          custom={profile.customStyles || []}
+          selected={profile.styles || []}
+          onToggle={(v) => toggle('styles', v)}
+          onAddCustom={(v) => addCustom('styles', 'customStyles', v)}
+          placeholder="Search styles, or add your own"
+        />
 
         <Stitch label="WHERE YOU SHOW UP" />
-        <Row>
-          {CONTEXTS.map((s) => (
-            <Chip key={s} label={s} active={profile.contexts?.includes(s)} onPress={() => toggle('contexts', s)} />
-          ))}
-        </Row>
+        <ChipPicker
+          options={CONTEXTS}
+          custom={profile.customContexts || []}
+          selected={profile.contexts || []}
+          onToggle={(v) => toggle('contexts', v)}
+          onAddCustom={(v) => addCustom('contexts', 'customContexts', v)}
+          placeholder="Search settings, or add your own"
+        />
 
         {!!learned.length && (
           <>

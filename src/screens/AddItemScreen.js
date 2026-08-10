@@ -9,7 +9,7 @@ import { Image } from 'expo-image';
 import Slider from '../components/Slider';
 import { Button, Chip, Field, Hint, Micro, Row, Stitch, Banner } from '../components/ui';
 import Garment from '../components/Garment';
-import { cutout, tagPhoto, readProduct, tagProduct } from '../api';
+import { cutout, tagPhoto, readProduct, tagProduct, findProduct } from '../api';
 import { prepareForUpload, saveCutout, saveRemoteImage, deleteImage } from '../services/images';
 import { insertItem, newId } from '../db';
 import { T, CATEGORIES, SEASONS, FORMALITY } from '../theme';
@@ -36,7 +36,7 @@ export default function AddItemScreen({ navigation, route }) {
       {!draft ? (
         <>
           <View style={a.seg}>
-            {[['photo', 'Photograph'], ['link', 'From a link'], ['manual', 'By hand']].map(([k, l]) => (
+            {[['photo', 'Photo'], ['search', 'Search'], ['link', 'Link'], ['manual', 'By hand']].map(([k, l]) => (
               <Pressable
                 key={k}
                 onPress={() => (k === 'manual' ? setDraft({ ...BLANK }) : setMode(k))}
@@ -49,6 +49,12 @@ export default function AddItemScreen({ navigation, route }) {
 
           {mode === 'photo' && (
             <PhotoFlow
+              itemId={pendingId}
+              onReady={(fields) => setDraft({ ...BLANK, ...fields })}
+            />
+          )}
+          {mode === 'search' && (
+            <SearchFlow
               itemId={pendingId}
               onReady={(fields) => setDraft({ ...BLANK, ...fields })}
             />
@@ -70,7 +76,9 @@ export default function AddItemScreen({ navigation, route }) {
             setDraft(null);
           }}
           onSave={async () => {
-            await insertItem({ ...draft, id: pendingId });
+            // The row id is generated at insert time. pendingId names the image
+            // file only — reusing it as the row id collides on a second save.
+            await insertItem({ ...draft });
             navigation.goBack();
           }}
         />
@@ -234,6 +242,155 @@ function LinkFlow({ itemId, initialUrl, onReady }) {
   );
 }
 
+/* ── Describe it → search the web → pick a match ─────────── */
+function SearchFlow({ itemId, onReady }) {
+  const [brand, setBrand] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [design, setDesign] = useState('');
+  const [shot, setShot] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [matches, setMatches] = useState(null);
+
+  const addShot = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (!res.canceled && res.assets?.[0]) {
+      const prepared = await prepareForUpload(res.assets[0].uri, 900);
+      setShot(prepared);
+    }
+  };
+
+  const shootDesign = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!res.canceled && res.assets?.[0]) {
+      const prepared = await prepareForUpload(res.assets[0].uri, 900);
+      setShot(prepared);
+    }
+  };
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    setMatches(null);
+    try {
+      const res = await findProduct({
+        brand: brand.trim(),
+        keywords: keywords.trim(),
+        design: design.trim(),
+        image: shot?.base64,
+      });
+      if (!res.matches?.length) {
+        setError("Nothing solid came back. Add more detail, or enter it by hand below.");
+      } else {
+        setMatches(res.matches);
+      }
+    } catch (e) {
+      setError(e.message || 'The search failed. Try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const choose = async (match) => {
+    setBusy(true);
+    let imageUri = null;
+    let price = match.price;
+    // If it found a real product page, pull the official photo and price from it.
+    if (match.url) {
+      try {
+        const product = await readProduct(match.url);
+        if (product.image) imageUri = await saveRemoteImage(product.image, itemId);
+        if (product.price) price = product.price;
+      } catch {
+        /* the retailer blocked us — the details from the search still stand */
+      }
+    }
+    setBusy(false);
+    onReady({ ...match, price, imageUri, sourceUrl: match.url || null });
+  };
+
+  if (matches) {
+    return (
+      <ScrollView contentContainerStyle={a.body}>
+        <Micro>{matches.length} possible {matches.length === 1 ? 'match' : 'matches'}</Micro>
+        {matches.map((m, i) => (
+          <Pressable
+            key={i}
+            onPress={() => choose(m)}
+            disabled={busy}
+            style={({ pressed }) => [a.match, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[a.swatch, { backgroundColor: m.color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={a.matchName}>{m.name}</Text>
+              <Text style={a.matchMeta} numberOfLines={1}>
+                {[m.brand, m.colorName, m.material].filter(Boolean).join(' · ')}
+              </Text>
+              <Text style={a.matchSource}>
+                {m.confidence === 'high' ? 'Confident' : m.confidence === 'medium' ? 'Likely' : 'Rough guess'}
+                {m.source ? ` · ${m.source}` : ''}
+                {m.price ? ` · ${m.price}` : ''}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+        {busy && <ActivityIndicator color={T.indigo} style={{ marginTop: 16 }} />}
+        <Button title="Search again" variant="ghost" style={{ marginTop: 16 }} onPress={() => setMatches(null)} />
+        <Button title="None of these — enter by hand" variant="ghost" style={{ marginTop: 8 }} onPress={() => onReady({})} />
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
+      <Hint>
+        Describe the piece and Threadline searches for it online. The more specific the better —
+        colour, cut, fit, fabric.
+      </Hint>
+      <View style={{ height: 14 }} />
+
+      <Field label="Brand, if you know it" value={brand} onChangeText={setBrand} placeholder="Mango" autoCapitalize="words" />
+      <Field
+        label="Describe it"
+        value={keywords}
+        onChangeText={setKeywords}
+        placeholder="light pink crop top, ribbed, small fit"
+        multiline
+      />
+      <Field
+        label="Key design or artwork — skip if plain"
+        value={design}
+        onChangeText={setDesign}
+        placeholder="embroidered cherries on the left chest"
+      />
+
+      <Micro>Photo of the design, or the whole piece — optional</Micro>
+      {shot ? (
+        <View style={a.shotRow}>
+          <Image source={{ uri: shot.uri }} style={a.shotThumb} contentFit="cover" />
+          <Button title="Remove" variant="ghost" onPress={() => setShot(null)} />
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+          <Button title="Take a photo" variant="ghost" style={{ flex: 1 }} onPress={shootDesign} />
+          <Button title="Choose one" variant="ghost" style={{ flex: 1 }} onPress={addShot} />
+        </View>
+      )}
+
+      <Button
+        title={busy ? 'Searching the web…' : 'Find it'}
+        busy={busy}
+        style={{ marginTop: 14 }}
+        disabled={!keywords.trim() && !brand.trim() && !shot}
+        onPress={run}
+      />
+      {!!error && <View style={{ marginTop: 14 }}><Banner tone="error">{error}</Banner></View>}
+    </ScrollView>
+  );
+}
+
 /* ── Confirm / edit before saving ────────────────────────── */
 function DraftForm({ draft, setDraft, onSave, onDiscard }) {
   const [saving, setSaving] = useState(false);
@@ -324,6 +481,7 @@ const a = StyleSheet.create({
   segBtn: { flex: 1, paddingVertical: 11, alignItems: 'center', backgroundColor: T.card },
   segOn: { backgroundColor: T.indigo },
   segText: { fontSize: 12, color: T.muted },
+  segBtnTight: { paddingHorizontal: 2 },
   cameraWrap: {
     margin: 20, height: 360, borderRadius: 3, overflow: 'hidden',
     borderWidth: 1, borderColor: T.seamDark, backgroundColor: '#000',
@@ -333,6 +491,16 @@ const a = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', borderStyle: 'dashed', borderRadius: 2,
   },
   workingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 10 },
+  match: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginTop: 10,
+    borderWidth: 1, borderColor: T.seam, borderRadius: 3, backgroundColor: T.card,
+  },
+  swatch: { width: 34, height: 34, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
+  matchName: { fontSize: 14, fontWeight: '600', color: T.ink },
+  matchMeta: { fontSize: 12, color: T.muted, marginTop: 2 },
+  matchSource: { fontSize: 10, color: T.muted, marginTop: 3, letterSpacing: 0.4, textTransform: 'uppercase' },
+  shotRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  shotThumb: { width: 64, height: 64, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
   workingText: { fontSize: 15, color: T.ink, fontWeight: '500' },
   preview: {
     alignItems: 'center', justifyContent: 'center', paddingVertical: 16, marginBottom: 10,

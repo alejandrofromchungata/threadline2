@@ -60,6 +60,13 @@ export const readProduct = (url) => post('/v1/product', { url });
 export const tagProduct = (payload) => post('/v1/tag-product', payload);
 
 /**
+ * Identify a piece from a description, brand and optional design photo.
+ * Searches the web for the real product.
+ * @returns {{ matches: Array }}
+ */
+export const findProduct = (payload) => post('/v1/find', payload, { timeout: 90000 });
+
+/**
  * Build an outfit from the closet.
  * @returns {{ name, itemIds, why, missing }}
  */

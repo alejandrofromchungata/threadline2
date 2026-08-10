@@ -71,8 +71,13 @@
           ],
           "disableIOS": true
         }
-      ]
+      ],
+      "expo-font"
     ],
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/icon.png"
+    },
     "extra": {
       "apiBaseUrl": "https://threadline-api.theapp-threadline.workers.dev",
       "eas": {

@@ -48,6 +48,7 @@ export default {
         case '/v1/tag-photo':  return await tagPhoto(body, env);
         case '/v1/product':    return await product(body);
         case '/v1/tag-product':return await tagProduct(body, env);
+        case '/v1/find':       return await find(body, env);
         case '/v1/outfit':     return await outfit(body, env);
         case '/v1/gaps':       return await gaps(body, env);
         case '/v1/pack':       return await pack(body, env);
@@ -61,7 +62,7 @@ export default {
 };
 
 /* ── rate limiting ───────────────────────────────────────── */
-const COST = { '/v1/cutout': 5, '/v1/tag-photo': 3 };
+const COST = { '/v1/cutout': 5, '/v1/tag-photo': 3, '/v1/find': 6 };
 
 async function rateLimit(request, env, pathname) {
   if (!env.RATE_LIMIT) return null;
@@ -78,12 +79,20 @@ async function rateLimit(request, env, pathname) {
 }
 
 /* ── Anthropic helpers ───────────────────────────────────── */
-async function claude(env, { system, content, maxTokens = 900 }) {
+async function claude(env, { system, content, maxTokens = 900, tools }) {
   if (!env.ANTHROPIC_API_KEY) {
     const e = new Error('ANTHROPIC_API_KEY is not set on the worker.');
     e.status = 500;
     throw e;
   }
+  const body = {
+    model: env.MODEL || 'claude-sonnet-5',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content }],
+  };
+  if (tools) body.tools = tools;
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -91,12 +100,7 @@ async function claude(env, { system, content, maxTokens = 900 }) {
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
-      model: env.MODEL || 'claude-sonnet-5',
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content }],
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -201,13 +205,16 @@ async function tagPhoto({ image }, env) {
   return json(normaliseFields(parseJson(text)));
 }
 
-/* ── /v1/product — read a retailer page ──────────────────── */
-async function product({ url }) {
-  if (!url || !/^https?:\/\//i.test(url)) return fail('Send a full http(s) product URL.');
+/* ── page scraping, shared by /v1/product and /v1/find ───── */
+async function scrapeProduct(url, { timeout = 8000 } = {}) {
+  const empty = {
+    title: '', brand: '', description: '', price: 0, currency: '',
+    image: null, url, blocked: true,
+  };
+  if (!url || !/^https?:\/\//i.test(url)) return empty;
 
-  // Many large retailers refuse plain bot requests, so present as a real browser.
-  const unreadable = () =>
-    json({ title: '', brand: '', description: '', price: 0, currency: '', image: null, url, blocked: true });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
 
   let page;
   try {
@@ -223,17 +230,18 @@ async function product({ url }) {
         'Sec-Fetch-Site': 'none',
       },
       redirect: 'follow',
+      signal: ctrl.signal,
       cf: { cacheTtl: 300 },
     });
   } catch {
-    return unreadable();
+    return empty;
+  } finally {
+    clearTimeout(timer);
   }
-  // Blocked or missing: hand back an empty shell so the app can still infer
-  // the item from the URL slug rather than dead-ending on the user.
-  if (!page.ok) return unreadable();
+
+  if (!page.ok) return empty;
 
   const found = { meta: {}, ldjson: [] };
-
   const rewriter = new HTMLRewriter()
     .on('meta', {
       element(el) {
@@ -252,43 +260,54 @@ async function product({ url }) {
       },
     });
 
-  await rewriter.transform(page).arrayBuffer();
+  try {
+    await rewriter.transform(page).arrayBuffer();
+  } catch {
+    return empty;
+  }
 
-  // Prefer schema.org Product data, fall back to OpenGraph.
-  let productNode = null;
+  let node = null;
   for (const raw of found.ldjson) {
     try {
       const parsed = JSON.parse(raw.trim());
       const nodes = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] || [])];
-      const hit = nodes.find((n) => n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product'))));
-      if (hit) { productNode = hit; break; }
+      const hit = nodes.find(
+        (n) => n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product')))
+      );
+      if (hit) { node = hit; break; }
     } catch { /* malformed block, keep looking */ }
   }
 
   const m = found.meta;
-  const offers = productNode?.offers
-    ? (Array.isArray(productNode.offers) ? productNode.offers[0] : productNode.offers)
-    : null;
+  const offers = node?.offers ? (Array.isArray(node.offers) ? node.offers[0] : node.offers) : null;
+  const rawImage =
+    (Array.isArray(node?.image) ? node.image[0] : typeof node?.image === 'string' ? node.image : null) ||
+    m['og:image'] || m['twitter:image'] || null;
 
-  const image = Array.isArray(productNode?.image)
-    ? productNode.image[0]
-    : (typeof productNode?.image === 'string' ? productNode.image : null)
-      || m['og:image'] || m['twitter:image'] || null;
+  const title = node?.name || m['og:title'] || m['twitter:title'] || '';
+  if (!title) return empty;
 
-  const result = {
-    title: productNode?.name || m['og:title'] || m['twitter:title'] || '',
-    brand:
-      (typeof productNode?.brand === 'object' ? productNode.brand?.name : productNode?.brand) ||
-      m['og:site_name'] || '',
-    description: (productNode?.description || m['og:description'] || m.description || '').slice(0, 600),
+  let image = null;
+  if (rawImage) {
+    try { image = new URL(rawImage, page.url).toString(); } catch { image = null; }
+  }
+
+  return {
+    title,
+    brand: (typeof node?.brand === 'object' ? node.brand?.name : node?.brand) || m['og:site_name'] || '',
+    description: (node?.description || m['og:description'] || m.description || '').slice(0, 600),
     price: Number(offers?.price || m['product:price:amount'] || 0) || 0,
     currency: offers?.priceCurrency || m['product:price:currency'] || '',
-    image: image ? new URL(image, page.url).toString() : null,
+    image,
     url: page.url,
+    blocked: false,
   };
+}
 
-  if (!result.title) return unreadable();
-  return json(result);
+/* ── /v1/product — read a retailer page ──────────────────── */
+async function product({ url }) {
+  if (!url || !/^https?:\/\//i.test(url)) return fail('Send a full http(s) product URL.');
+  return json(await scrapeProduct(url));
 }
 
 /* ── /v1/tag-product — classify scraped text ─────────────── */
@@ -344,6 +363,82 @@ async function outfit(body, env) {
     why: String(parsed.why || '').slice(0, 200),
     missing: String(parsed.missing || '').slice(0, 120),
   });
+}
+
+/* ── /v1/find — describe it, and the web gets searched ───── */
+async function find(body, env) {
+  const { brand, keywords, design, image } = body;
+  if (!keywords && !brand && !image) return fail('Describe the piece first.');
+
+  const described =
+    `Brand: ${brand || '(unknown)'}\n` +
+    `Description: ${keywords || '(none given)'}\n` +
+    `Key design or artwork: ${design || '(none)'}\n`;
+
+  const content = [];
+  if (image) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/jpeg', data: image },
+    });
+    content.push({
+      type: 'text',
+      text:
+        `The image shows the garment, or the artwork/graphic printed on it. Read it carefully — ` +
+        `any visible text, logo, motif or print is the strongest clue to the exact product.\n\n`,
+    });
+  }
+  content.push({
+    type: 'text',
+    text:
+      `Find this specific clothing item for sale online.\n\n${described}\n` +
+      `Search the web. Prefer the brand's own site, then large retailers. If you cannot find the ` +
+      `exact piece, return the closest genuine matches you did find — never invent a product or a URL.\n\n` +
+      `Reply with ONLY JSON, no prose, no fences:\n` +
+      `{"matches":[{"name":string (2-6 words),"brand":string,"price":number (0 if unknown),` +
+      `"url":string (the product page you actually found, or ""),"source":string (site name),` +
+      `"confidence":"high"|"medium"|"low","category":one of ${JSON.stringify(CATEGORIES)},` +
+      `"color":hex of the garment colour,"colorName":string,"material":string,` +
+      `"seasons":array from ${JSON.stringify(SEASONS)},"formality":integer 1-5,` +
+      `"tags":array of 2-3 short lowercase occasion words}]}\n` +
+      `Return at most 4 matches, best first.`,
+  });
+
+  const text = await claude(env, {
+    system:
+      'You identify clothing from descriptions and images, using web search to find the real product. ' +
+      'You never fabricate products or URLs. You reply with JSON only — no prose, no code fences.',
+    maxTokens: 2000,
+    content,
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+  });
+
+  const parsed = parseJson(text);
+  const matches = (parsed.matches || []).slice(0, 4).map((m) => ({
+    ...normaliseFields(m),
+    url: typeof m.url === 'string' && /^https?:\/\//.test(m.url) ? m.url : '',
+    source: String(m.source || '').slice(0, 40),
+    confidence: ['high', 'medium', 'low'].includes(m.confidence) ? m.confidence : 'low',
+  }));
+
+  // Visit each product page in parallel for the real photo and the live price.
+  // Blocked or slow pages simply come back without one rather than holding up the rest.
+  const enriched = await Promise.all(
+    matches.map(async (m) => {
+      if (!m.url) return { ...m, image: null, verified: false };
+      const page = await scrapeProduct(m.url, { timeout: 6000 });
+      return {
+        ...m,
+        image: page.image,
+        price: page.price || m.price,
+        name: page.title ? page.title.slice(0, 70) : m.name,
+        brand: m.brand || page.brand,
+        verified: !page.blocked,
+      };
+    })
+  );
+
+  return json({ matches: enriched });
 }
 
 /* ── /v1/gaps — wardrobe audit ───────────────────────────── */

@@ -4,10 +4,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Path, Circle } from 'react-native-svg';
 import ItemCard from '../components/ItemCard';
-import { Chip, Button, Hint, Micro } from '../components/ui';
+import { Chip, Button, Hint, Eyebrow, Heading } from '../components/ui';
+import Garment from '../components/Garment';
 import { listItems } from '../db';
-import { T, CATEGORIES } from '../theme';
+import { T, FONTS, CATEGORIES } from '../theme';
 
 const SORTS = [
   ['recent', 'added'],
@@ -16,11 +18,40 @@ const SORTS = [
   ['name', 'a–z'],
 ];
 
+function NeedleMark() {
+  return (
+    <Svg viewBox="0 0 24 24" width={22} height={22}>
+      <Path d="M6 18l9-13" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M15 5l2 1-1 2" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={7} cy={17} r={2} stroke={T.indigo} strokeWidth={1.4} fill="none" />
+    </Svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <Svg viewBox="0 0 24 24" width={19} height={19}>
+      <Path d="M4 6h16M7 12h10M10 18h4" stroke={T.ink} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <Svg viewBox="0 0 24 24" width={19} height={19}>
+      <Circle cx={11} cy={11} r={7} stroke={T.ink} strokeWidth={1.8} fill="none" />
+      <Path d="M21 21l-4.3-4.3" stroke={T.ink} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export default function ClosetScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [cat, setCat] = useState('all');
   const [sort, setSort] = useState('recent');
+  const [showSort, setShowSort] = useState(false);
   const [loading, setLoading] = useState(true);
   const { width } = useWindowDimensions();
 
@@ -50,53 +81,72 @@ export default function ClosetScreen({ navigation }) {
     return list;
   }, [items, q, cat, sort]);
 
-  const cardWidth = (Math.min(width, 620) - 40 - 12) / 2;
+  const cardWidth = (Math.min(width, 620) - 40 - 16) / 2;
 
   return (
     <SafeAreaView style={cs.safe} edges={['top']}>
-      <View style={cs.head}>
-        <Text style={cs.title}>Closet</Text>
-        <Text style={cs.count}>{items.length} pieces</Text>
+      <View style={cs.brandBar}>
+        <View style={cs.brandLogo}>
+          <NeedleMark />
+          <Text style={cs.wordmark}>Threadline</Text>
+        </View>
+        <View style={cs.actionIcons}>
+          <Pressable onPress={() => setShowSort((v) => !v)} hitSlop={8}><FilterIcon /></Pressable>
+          <Pressable onPress={() => setShowSearch((v) => !v)} hitSlop={8}><SearchIcon /></Pressable>
+        </View>
       </View>
 
-      <View style={{ paddingHorizontal: 20 }}>
-        <TextInput
-          value={q}
-          onChangeText={setQ}
-          placeholder="Search — try “wool” or “date night”"
-          placeholderTextColor="#A9A69C"
-          style={cs.search}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-        />
-      </View>
+      {showSearch && (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Search — try “wool” or “date night”"
+            placeholderTextColor={T.muted}
+            style={cs.search}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            autoFocus
+          />
+        </View>
+      )}
+
+      {showSort && (
+        <View style={cs.sortRow}>
+          <Eyebrow style={{ marginRight: 4 }}>Sort</Eyebrow>
+          {SORTS.map(([k, l]) => (
+            <Pressable key={k} onPress={() => setSort(k)} hitSlop={8}>
+              <Text style={[cs.sortLink, sort === k && cs.sortOn]}>{l}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={cs.chipRow}
       >
-        <Chip small label="all" active={cat === 'all'} onPress={() => setCat('all')} />
+        <Chip small label="All" active={cat === 'all'} onPress={() => setCat('all')} />
         {CATEGORIES.map((c) => (
-          <Chip key={c} small label={c} active={cat === c} onPress={() => setCat(c)} />
+          <Chip
+            key={c}
+            small
+            label={c[0].toUpperCase() + c.slice(1)}
+            active={cat === c}
+            onPress={() => setCat(c)}
+          />
         ))}
       </ScrollView>
 
-      <View style={cs.sortRow}>
-        <Micro style={{ marginBottom: 0 }}>Sort</Micro>
-        {SORTS.map(([k, l]) => (
-          <Pressable key={k} onPress={() => setSort(k)} hitSlop={8}>
-            <Text style={[cs.sortLink, sort === k && cs.sortOn]}>{l}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <View style={cs.divider} />
 
       <FlatList
         data={shown}
         keyExtractor={(i) => i.id}
         numColumns={2}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 20 }}
-        contentContainerStyle={{ gap: 12, paddingBottom: 120 }}
+        columnWrapperStyle={{ gap: 16, paddingHorizontal: 20 }}
+        contentContainerStyle={{ gap: 16, paddingTop: 20, paddingBottom: 40 }}
         renderItem={({ item }) => (
           <ItemCard
             item={item}
@@ -107,9 +157,10 @@ export default function ClosetScreen({ navigation }) {
         ListEmptyComponent={
           loading ? null : (
             <View style={cs.empty}>
-              <Text style={cs.emptyTitle}>
+              <Garment category="tops" color={T.seamDark} size={72} />
+              <Heading size={20} style={{ marginTop: 16, textAlign: 'center' }}>
                 {items.length ? 'Nothing matches that.' : 'The closet is empty.'}
-              </Text>
+              </Heading>
               <Hint style={{ textAlign: 'center', marginTop: 6 }}>
                 {items.length
                   ? 'Try a different search or category.'
@@ -126,42 +177,30 @@ export default function ClosetScreen({ navigation }) {
           )
         }
       />
-
-      <Pressable
-        style={cs.fab}
-        onPress={() => navigation.navigate('AddItem')}
-        accessibilityRole="button"
-        accessibilityLabel="Add a piece"
-      >
-        <Text style={cs.fabText}>+</Text>
-      </Pressable>
     </SafeAreaView>
   );
 }
 
 const cs = StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
-  head: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
+  brandBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 12,
   },
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.9, color: T.ink },
-  count: { fontSize: 11, color: T.muted },
+  brandLogo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wordmark: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  actionIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   search: {
-    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 2,
-    paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: T.ink,
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 12, fontFamily: FONTS.sans, fontSize: 15, color: T.ink,
   },
-  chipRow: { gap: 7, paddingHorizontal: 20, paddingVertical: 12 },
-  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingBottom: 14 },
-  sortLink: { fontSize: 12, color: T.muted },
+  sortRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 20, paddingBottom: 10, flexWrap: 'wrap',
+  },
+  sortLink: { fontFamily: FONTS.sansMedium, fontSize: 12, color: T.muted },
   sortOn: { color: T.indigo, textDecorationLine: 'underline' },
+  chipRow: { gap: 8, paddingHorizontal: 20, paddingVertical: 12 },
+  divider: { height: 1, backgroundColor: T.seam },
   empty: { padding: 40, alignItems: 'center' },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: T.ink },
-  fab: {
-    position: 'absolute', right: 20, bottom: 28, width: 56, height: 56, borderRadius: 28,
-    backgroundColor: T.indigo, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#2B3A7E', shadowOpacity: 0.34, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  fabText: { color: '#fff', fontSize: 30, lineHeight: 34, fontWeight: '400' },
 });

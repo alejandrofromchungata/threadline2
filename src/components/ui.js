@@ -2,7 +2,16 @@ import React from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
-import { T } from '../theme';
+import { T, FONTS } from '../theme';
+
+/** Small mono caps label, used as an "eyebrow" above headings and as a divider. */
+export function Eyebrow({ children, tone = 'muted', style }) {
+  return (
+    <Text style={[s.eyebrow, tone === 'indigo' && { color: T.indigo }, style]}>
+      {children}
+    </Text>
+  );
+}
 
 export function Stitch({ label, style }) {
   return (
@@ -35,6 +44,7 @@ export function Chip({ label, active, onPress, small }) {
 export function Button({ title, onPress, disabled, busy, variant = 'primary', style }) {
   const isGhost = variant === 'ghost';
   const isDanger = variant === 'danger';
+  const isCircle = variant === 'circle';
   return (
     <Pressable
       onPress={onPress}
@@ -44,6 +54,7 @@ export function Button({ title, onPress, disabled, busy, variant = 'primary', st
         s.btn,
         isGhost && s.btnGhost,
         isDanger && s.btnDanger,
+        isCircle && s.btnCircle,
         (disabled || busy) && s.btnDisabled,
         pressed && { opacity: 0.82 },
         style,
@@ -60,21 +71,30 @@ export function Button({ title, onPress, disabled, busy, variant = 'primary', st
   );
 }
 
+/** Circular icon-only button, matching the quick-action row on the outfit result screen. */
+export function IconButton({ children, onPress, tint = T.ink, style }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.75 }, style]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 export function Field({ label, ...props }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      {!!label && <Text style={s.micro}>{label}</Text>}
-      <TextInput
-        placeholderTextColor="#A9A69C"
-        style={s.field}
-        {...props}
-      />
+      {!!label && <Eyebrow style={{ marginBottom: 6 }}>{label}</Eyebrow>}
+      <TextInput placeholderTextColor={T.muted} style={s.field} {...props} />
     </View>
   );
 }
 
 export function Micro({ children, style }) {
-  return <Text style={[s.micro, style]}>{children}</Text>;
+  return <Eyebrow style={style}>{children}</Eyebrow>;
 }
 
 export function Hint({ children, style }) {
@@ -82,7 +102,22 @@ export function Hint({ children, style }) {
 }
 
 export function Row({ children, style }) {
-  return <View style={[{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, style]}>{children}</View>;
+  return <View style={[{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, style]}>{children}</View>;
+}
+
+/** Display heading in Cormorant Garamond, the serif used throughout the design. */
+export function Heading({ children, size = 26, style }) {
+  return <Text style={[s.heading, { fontSize: size }, style]}>{children}</Text>;
+}
+
+/** The bordered "care-label-card" pattern used for weather, calendar, and note blocks. */
+export function CareCard({ eyebrow, children, accent, style }) {
+  return (
+    <View style={[s.careCard, accent && { borderColor: T.indigo }, style]}>
+      {!!eyebrow && <Text style={[s.eyebrow, accent && { color: T.indigo }]}>{eyebrow}</Text>}
+      {children}
+    </View>
+  );
 }
 
 export function Sheet({ visible, title, onClose, children }) {
@@ -107,7 +142,7 @@ export function Sheet({ visible, title, onClose, children }) {
 export function Banner({ tone = 'info', children, action, onAction }) {
   const tint = tone === 'warn' ? T.ochre : tone === 'error' ? T.rust : T.indigo;
   return (
-    <View style={[s.banner, { borderColor: tint, backgroundColor: `${tint}14` }]}>
+    <View style={[s.banner, { borderColor: tint, backgroundColor: `${tint}12` }]}>
       <View style={{ flex: 1 }}>{typeof children === 'string' ? <Text style={s.bannerText}>{children}</Text> : children}</View>
       {!!action && <Button title={action} variant="ghost" onPress={onAction} />}
     </View>
@@ -115,45 +150,62 @@ export function Banner({ tone = 'info', children, action, onAction }) {
 }
 
 export const s = StyleSheet.create({
+  eyebrow: {
+    fontFamily: FONTS.monoSemi, fontSize: 11, letterSpacing: 1.2,
+    textTransform: 'uppercase', color: T.muted,
+  },
+
   stitchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
-  stitchLine: { flex: 1, height: 1, borderTopWidth: 1, borderColor: T.seamDark, borderStyle: 'dashed' },
-  stitchLabel: { fontSize: 9, letterSpacing: 2, color: T.muted, fontVariant: ['tabular-nums'] },
+  stitchLine: { flex: 1, height: 1, backgroundColor: T.seam },
+  stitchLabel: { fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1.5, color: T.muted },
 
   chip: {
     borderWidth: 1, borderColor: T.seam, backgroundColor: T.card,
-    paddingVertical: 7, paddingHorizontal: 12, borderRadius: 100,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 100,
   },
-  chipSmall: { paddingVertical: 5, paddingHorizontal: 10 },
+  chipSmall: { paddingVertical: 6, paddingHorizontal: 12 },
   chipOn: { backgroundColor: T.indigo, borderColor: T.indigo },
-  chipText: { fontSize: 13, color: T.ink },
+  chipText: { fontFamily: FONTS.sansMedium, fontSize: 13, color: T.ink },
 
   btn: {
-    backgroundColor: T.indigo, paddingVertical: 14, paddingHorizontal: 18,
-    borderRadius: 2, alignItems: 'center', justifyContent: 'center', minHeight: 48,
+    backgroundColor: T.indigo, paddingVertical: 15, paddingHorizontal: 20,
+    borderRadius: 26, alignItems: 'center', justifyContent: 'center', minHeight: 52,
   },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: T.seamDark, paddingVertical: 10, minHeight: 44 },
-  btnDanger: { backgroundColor: 'transparent', borderWidth: 1, borderColor: T.rust, borderStyle: 'dashed' },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: T.seam, paddingVertical: 11, minHeight: 44 },
+  btnDanger: { backgroundColor: 'transparent', borderWidth: 1, borderColor: T.rust },
   btnDisabled: { backgroundColor: T.seamDark, borderColor: T.seam },
-  btnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  btnText: { fontFamily: FONTS.sansSemi, color: '#fff', fontSize: 16 },
+  btnCircle: { width: 44, height: 44, borderRadius: 22, minHeight: 0, padding: 0 },
+
+  iconBtn: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: T.card,
+    borderWidth: 1, borderColor: T.seam, alignItems: 'center', justifyContent: 'center',
+  },
 
   field: {
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam,
-    paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, color: T.ink, borderRadius: 2,
+    paddingHorizontal: 14, paddingVertical: 13, fontFamily: FONTS.sans, fontSize: 15,
+    color: T.ink, borderRadius: 8,
   },
-  micro: { fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: T.muted, marginBottom: 6 },
-  hint: { fontSize: 13, color: T.muted, lineHeight: 19 },
+  hint: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted, lineHeight: 19 },
+  heading: { fontFamily: FONTS.display, color: T.ink, letterSpacing: -0.3 },
 
-  sheetWrap: { flex: 1, backgroundColor: 'rgba(26,28,32,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '88%', backgroundColor: T.paper, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  careCard: {
+    borderWidth: 1, borderColor: T.seam, borderRadius: 8, backgroundColor: T.card,
+    padding: 16, gap: 12,
+  },
+
+  sheetWrap: { flex: 1, backgroundColor: 'rgba(38,35,34,0.45)', justifyContent: 'flex-end' },
+  sheet: { maxHeight: '88%', backgroundColor: T.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   sheetHead: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderColor: T.seam,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.4, flex: 1, marginRight: 12, color: T.ink },
+  sheetTitle: { fontFamily: FONTS.display, fontSize: 20, flex: 1, marginRight: 12, color: T.ink },
 
   banner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderRadius: 2, padding: 12, marginBottom: 14,
+    borderWidth: 1, borderRadius: 8, padding: 14, marginBottom: 14,
   },
-  bannerText: { fontSize: 13, color: T.ink, lineHeight: 18 },
+  bannerText: { fontFamily: FONTS.sans, fontSize: 13, color: T.ink, lineHeight: 18 },
 });
