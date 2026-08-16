@@ -10,8 +10,8 @@ import { ArrowLeft, Link2 } from 'lucide-react-native';
 import Slider from '../components/Slider';
 import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
 import Garment from '../components/Garment';
-import { cutout, tagPhoto, readProduct, tagProduct, findProduct } from '../api';
-import { prepareForUpload, saveCutout, saveRemoteCutout, deleteImage } from '../services/images';
+import { tagPhoto, readProduct, tagProduct, findProduct } from '../api';
+import { prepareForUpload, removeBackgroundToCloset, saveRemoteCutout, deleteImage } from '../services/images';
 import { insertItem, newId } from '../db';
 import { CATEGORIES, SEASONS, FORMALITY, FONTS, formalityDots } from '../theme';
 import { useTheme } from '../ThemeContext';
@@ -155,15 +155,15 @@ function PhotoFlow({ itemId, onReady }) {
       setError(null);
       setStage('cutting');
       console.log('[timing] prepareForUpload: start');
-      const { base64 } = await prepareForUpload(uri);
+      const { uri: prepared, base64 } = await prepareForUpload(uri);
       console.log(`[timing] prepareForUpload: ${Date.now() - t0}ms, base64 length ${base64.length}`);
 
       // Cutting out the background and reading the garment don't depend on
       // each other — running them at the same time instead of one after the
       // other roughly halves the wait.
       const tParallel = Date.now();
-      const [{ pngBase64 }, fields] = await Promise.all([
-        cutout(base64).then((r) => {
+      const [imageUri, fields] = await Promise.all([
+        removeBackgroundToCloset(prepared, itemId, base64).then((r) => {
           console.log(`[timing] cutout: ${Date.now() - tParallel}ms`);
           return r;
         }),
@@ -178,9 +178,6 @@ function PhotoFlow({ itemId, onReady }) {
             return {};
           }),
       ]);
-      const tSave = Date.now();
-      const imageUri = await saveCutout(pngBase64, itemId);
-      console.log(`[timing] saveCutout: ${Date.now() - tSave}ms`);
       console.log(`[timing] TOTAL photo flow: ${Date.now() - t0}ms`);
 
       onReady({ ...fields, imageUri });
