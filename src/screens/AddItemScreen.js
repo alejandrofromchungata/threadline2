@@ -782,7 +782,7 @@ const makeStyles = (T) => StyleSheet.create({
   },
   slipChipOn: { backgroundColor: T.indigo },
   slipChipText: { fontFamily: FONTS.sansMedium, fontSize: 12, lineHeight: 16, color: T.ink },
-  slipChipTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
+  slipChipTextOn: { color: '#fff' },  // colour only — a heavier face resizes the chip
   swatchDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: T.seam },
   swatchDotOn: { borderWidth: 2, borderColor: T.indigo },
   backEdit: { paddingVertical: 8, alignItems: 'center', marginTop: 12 },

@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet, Pressable } from 'react-nati
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -50,7 +50,7 @@ function AddTabButton({ onPress }) {
   return (
     <Pressable onPress={onPress} style={tb.addWrap} accessibilityRole="button" accessibilityLabel="Add a piece">
       <View style={tb.addCircle}>
-        <Plus size={16} color="#fff" strokeWidth={2} />
+        <Plus size={24} color="#fff" strokeWidth={2.25} />
       </View>
     </Pressable>
   );
@@ -167,6 +167,7 @@ function AppContent() {
 // threading extra props into every other tab.
 function TabsWithReset({ onReset }) {
   const { T } = useTheme();
+  const insets = useSafeAreaInsets();
   const tb = useMemo(() => makeTbStyles(T), [T]);
   return (
     <Tab.Navigator
@@ -174,7 +175,10 @@ function TabsWithReset({ onReset }) {
         headerShown: false,
         tabBarActiveTintColor: T.indigo,
         tabBarInactiveTintColor: T.muted,
-        tabBarStyle: tb.bar,
+        tabBarStyle: [
+          tb.bar,
+          { height: 68 + insets.bottom, paddingBottom: insets.bottom + 10 },
+        ],
         // Figma sets the active tab in Geist 600 and the rest in Geist 500,
         // so the label is rendered directly rather than via tabBarLabelStyle.
         tabBarLabel: ({ focused, color }) => (
@@ -207,12 +211,11 @@ const makeAppStyles = (T) => StyleSheet.create({
 });
 
 const makeTbStyles = (T) => StyleSheet.create({
-  bar: { backgroundColor: T.card, borderTopColor: T.seam, height: 78, paddingTop: 8 },
+  bar: { backgroundColor: T.card, borderTopColor: T.seam, paddingTop: 10 },
   label: { fontSize: 10, lineHeight: 13, letterSpacing: 0 },
   addWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', top: -2 },
   addCircle: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: T.indigo,
+    width: 46, height: 46, borderRadius: 23, backgroundColor: T.indigo,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: T.indigo, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },
 });

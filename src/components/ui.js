@@ -42,9 +42,8 @@ export function Stitch({ label, style }) {
 }
 
 /**
- * `picker` matches Figma's onboarding picker-chip (roomier padding, 14pt text,
- * regular weight when unselected); the default matches the closet category
- * pill (14pt horizontal padding, 13pt medium). Both go semibold when active.
+ * `picker` matches Figma's onboarding picker-chip (roomier padding, 14pt text);
+ * the default matches the closet category pill (14pt horizontal padding, 13pt).
  */
 export function Chip({ label, active, onPress, small, picker }) {
   const { s } = useUiStyles();
@@ -61,31 +60,13 @@ export function Chip({ label, active, onPress, small, picker }) {
         pressed && { opacity: 0.75 },
       ]}
     >
-      {/* Figma sets the selected label in Geist 600 and the rest in 500, which
-          would make a chip visibly widen the moment it is tapped. The hidden
-          copy is always semibold, so it reserves the wider width and the
-          visible label can change weight without shifting the layout. */}
-      <View>
-        <Text
-          aria-hidden
-          importantForAccessibility="no"
-          style={[s.chipText, small && { fontSize: 12 }, picker && s.chipTextPicker, s.chipSizer]}
-        >
-          {label}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={[
-            s.chipText,
-            small && { fontSize: 12 },
-            picker && s.chipTextPicker,
-            active && s.chipTextOn,
-            s.chipLabel,
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
+      {/* One text node, one font face. Figma sets the selected label a weight
+          heavier, but swapping the face changes the label's measured width and
+          the pill visibly resizes on tap, so selection is carried by colour
+          alone — the white-on-indigo fill already reads unambiguously. */}
+      <Text numberOfLines={1} style={[s.chipText, small && { fontSize: 12 }, picker && s.chipTextPicker, active && s.chipTextOn]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -227,10 +208,8 @@ const makeStyles = (T) => StyleSheet.create({
   chipOn: { backgroundColor: T.indigo },
   chipText: { fontFamily: FONTS.sansMedium, fontSize: 13, lineHeight: 17, color: T.ink },
   chipTextPicker: { fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18 },
-  chipTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
-  // Width reservation only — never drawn.
-  chipSizer: { fontFamily: FONTS.sansSemi, opacity: 0 },
-  chipLabel: { position: 'absolute', left: 0, right: 0, top: 0, textAlign: 'center' },
+  // Colour only: changing the font face here resizes the pill on tap.
+  chipTextOn: { color: '#fff' },
 
   btn: {
     backgroundColor: T.indigo, paddingVertical: 15, paddingHorizontal: 20,
