@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert,
+  View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -8,12 +8,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
 import Slider from '../components/Slider';
-import { Button, Chip, Field, Hint, Micro, Row, Stitch, Banner } from '../components/ui';
+import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
 import Garment from '../components/Garment';
 import { cutout, tagPhoto, readProduct, tagProduct, findProduct } from '../api';
 import { prepareForUpload, saveCutout, saveRemoteImage, deleteImage } from '../services/images';
 import { insertItem, newId } from '../db';
-import { CATEGORIES, SEASONS, FORMALITY, FONTS } from '../theme';
+import { CATEGORIES, SEASONS, FORMALITY, FONTS, formalityDots } from '../theme';
 import { useTheme } from '../ThemeContext';
 
 const BLANK = {
@@ -21,6 +21,21 @@ const BLANK = {
   material: '', seasons: ['spring'], formality: 3, tags: [], price: 0,
   imageUri: null, sourceUrl: null,
 };
+
+// Figma's confidence-badge: a coloured dot plus a mono label. Green for a
+// confident match, amber for likely, neutral grey for a rough guess.
+const CONFIDENCE = {
+  high: { label: 'Confident', dot: (T) => T.sage },
+  medium: { label: 'Likely', dot: (T) => T.ochre },
+  low: { label: 'Rough guess', dot: (T) => T.muted },
+};
+
+// Figma's colour-grid on the tailor's slip. Drives the fallback garment
+// illustration, which previously had no UI at all.
+const SWATCHES = [
+  '#262322', '#FCFAF5', '#2A3C63', '#4A533C',
+  '#A52A2A', '#808080', '#E1C699', '#FAF0E6',
+];
 
 const SEARCH_STEPS = [
   'Checking the brand’s own site…',
@@ -284,22 +299,35 @@ function LinkFlow({ itemId, initialUrl, onReady }) {
 
   return (
     <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
-      <Hint>
-        Paste a product link, or share one to Threadline from any shopping app. Name, brand, price and
-        photo come across; the rest is inferred.
-      </Hint>
-      <View style={{ height: 14 }} />
-      <Field
-        label="Product link"
-        value={url}
-        onChangeText={setUrl}
-        placeholder="https://www.uniqlo.com/…/merino-crew-neck-sweater"
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        multiline
+      <Micro>01 / Enter product URL</Micro>
+      <View style={[a.inputBox, { marginTop: 8 }]}>
+        <Svg viewBox="0 0 24 24" width={18} height={18}>
+          <Path
+            d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.2-1.2"
+            stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none"
+          />
+        </Svg>
+        <TextInput
+          value={url}
+          onChangeText={setUrl}
+          placeholder="https://www.uniqlo.com/…/merino-crew-neck-sweater"
+          placeholderTextColor={T.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          style={a.inputBoxText}
+        />
+      </View>
+      <Text style={a.linkTip}>
+        Tip: you can also share a garment straight to Threadline from any shopping app.
+      </Text>
+      <Button
+        title={busy ? 'Reading the page…' : 'Pull in details'}
+        busy={busy}
+        onPress={run}
+        disabled={!url.trim()}
+        style={{ marginTop: 20 }}
       />
-      <Button title={busy ? 'Reading the page…' : 'Pull in details'} busy={busy} onPress={run} disabled={!url.trim()} />
       {!!error && <View style={{ marginTop: 14 }}><Banner tone="error">{error}</Banner></View>}
     </ScrollView>
   );
@@ -405,32 +433,43 @@ function SearchFlow({ itemId, onReady }) {
   if (matches) {
     return (
       <ScrollView contentContainerStyle={a.body}>
-        <Micro>{matches.length} possible {matches.length === 1 ? 'match' : 'matches'}</Micro>
-        {matches.map((m, i) => (
-          <Pressable
-            key={i}
-            onPress={() => choose(m)}
-            disabled={busy}
-            style={({ pressed }) => [a.match, pressed && { opacity: 0.7 }]}
-          >
-            {m.image ? (
-              <Image source={{ uri: m.image }} style={a.matchPhoto} contentFit="cover" />
-            ) : (
-              <View style={[a.swatch, { backgroundColor: m.color }]} />
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={a.matchName}>{m.name}</Text>
-              <Text style={a.matchMeta} numberOfLines={1}>
-                {[m.brand, m.colorName, m.material].filter(Boolean).join(' · ')}
-              </Text>
-              <Text style={a.matchSource}>
-                {m.confidence === 'high' ? 'Confident' : m.confidence === 'medium' ? 'Likely' : 'Rough guess'}
-                {m.source ? ` · ${m.source}` : ''}
-                {m.price ? ` · ${m.price}` : ''}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
+        <Text style={a.resultsLbl}>
+          {`Candidate matches found (${matches.length})`}
+        </Text>
+        {matches.map((m, i) => {
+          const conf = CONFIDENCE[m.confidence] || CONFIDENCE.low;
+          return (
+            <Pressable
+              key={i}
+              onPress={() => choose(m)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={`${m.name}, ${conf.label}`}
+              style={({ pressed }) => [a.match, pressed && { opacity: 0.7 }]}
+            >
+              {m.image ? (
+                <Image source={{ uri: m.image }} style={a.matchPhoto} contentFit="cover" />
+              ) : (
+                <View style={[a.matchPhoto, { backgroundColor: m.color || T.cardArt }]} />
+              )}
+              <View style={a.matchInfo}>
+                <View style={a.brandBar}>
+                  <Text style={a.matchBrand} numberOfLines={1}>{m.brand || '—'}</Text>
+                  <View style={a.confBadge}>
+                    <View style={[a.confDot, { backgroundColor: conf.dot(T) }]} />
+                    <Text style={a.confText}>{conf.label}</Text>
+                  </View>
+                </View>
+                <Text style={a.matchName} numberOfLines={1}>{m.name}</Text>
+                {!!m.material && <Text style={a.matchMaterial} numberOfLines={1}>{m.material}</Text>}
+                <View style={a.priceRow}>
+                  <Text style={a.matchPrice}>{m.price ? `${m.price}` : '—'}</Text>
+                  <Text style={a.matchSource} numberOfLines={1}>{m.source || 'Retailer link'}</Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        })}
         {busy && <ActivityIndicator color={T.indigo} style={{ marginTop: 16 }} />}
         <Button title="Search again" variant="ghost" style={{ marginTop: 16 }} onPress={() => setMatches(null)} />
         <Button title="None of these — enter by hand" variant="ghost" style={{ marginTop: 8 }} onPress={() => onReady({})} />
@@ -511,56 +550,152 @@ function DraftForm({ draft, setDraft, onSave, onDiscard }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={a.draftBody} keyboardShouldPersistTaps="handled">
       <View style={a.preview}>
         {draft.imageUri ? (
-          <Image source={{ uri: draft.imageUri }} style={{ width: 160, height: 160 }} contentFit="contain" />
+          <Image source={{ uri: draft.imageUri }} style={{ width: '100%', height: 220 }} contentFit="contain" />
         ) : (
           <Garment category={draft.category} color={draft.color} size={140} />
         )}
       </View>
 
-      <Field label="Name" value={draft.name} onChangeText={(v) => set('name', v)} placeholder="Ribbed knit polo" />
-      <Field label="Brand" value={draft.brand} onChangeText={(v) => set('brand', v)} placeholder="COS" />
+      {/* Figma calls this the "tailor's slip": one bordered card holding
+          underlined fields rather than a stack of boxed inputs. */}
+      <View style={a.slipCard}>
+        <Micro>Individual tailor’s slip</Micro>
+        <View style={a.slipDivider} />
 
-      <Micro>Category</Micro>
-      <Row style={{ marginBottom: 14 }}>
-        {CATEGORIES.map((c) => (
-          <Chip key={c} small label={c} active={draft.category === c} onPress={() => set('category', c)} />
-        ))}
-      </Row>
+        <View style={{ gap: 12 }}>
+          <SlipField
+            label="Garment name *"
+            big
+            value={draft.name}
+            onChangeText={(v) => set('name', v)}
+            placeholder="Ribbed knit polo"
+          />
 
-      <Field label="Colour" value={draft.colorName} onChangeText={(v) => set('colorName', v)} placeholder="forest green" />
-      <Field label="Material" value={draft.material} onChangeText={(v) => set('material', v)} placeholder="merino wool" />
+          <View style={a.slipRow}>
+            <SlipField
+              label="Brand"
+              style={{ flex: 1 }}
+              value={draft.brand}
+              onChangeText={(v) => set('brand', v)}
+              placeholder="COS"
+            />
+            <SlipField label="Category" style={{ flex: 1 }} static>
+              <Row style={{ gap: 6 }}>
+                {CATEGORIES.map((c) => (
+                  <SlipChip key={c} label={c} active={draft.category === c} onPress={() => set('category', c)} />
+                ))}
+              </Row>
+            </SlipField>
+          </View>
 
-      <Micro>Season</Micro>
-      <Row style={{ marginBottom: 14 }}>
-        {SEASONS.map((s) => (
-          <Chip key={s} small label={s} active={draft.seasons.includes(s)} onPress={() => toggleSeason(s)} />
-        ))}
-      </Row>
+          <SlipField label="Garment swatch colour" static>
+            <Row style={{ gap: 8 }}>
+              {SWATCHES.map((hex) => (
+                <Pressable
+                  key={hex}
+                  onPress={() => set('color', hex)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: draft.color === hex }}
+                  accessibilityLabel={`Swatch ${hex}`}
+                  style={[
+                    a.swatchDot,
+                    { backgroundColor: hex },
+                    draft.color === hex && a.swatchDotOn,
+                  ]}
+                />
+              ))}
+            </Row>
+          </SlipField>
 
-      <Micro>{`Formality — ${FORMALITY[draft.formality - 1]}`}</Micro>
-      <Slider min={1} max={5} value={draft.formality} onChange={(v) => set('formality', v)} />
+          <SlipField
+            label="Colour name"
+            value={draft.colorName}
+            onChangeText={(v) => set('colorName', v)}
+            placeholder="forest green"
+          />
+          <SlipField
+            label="Material composition"
+            value={draft.material}
+            onChangeText={(v) => set('material', v)}
+            placeholder="merino wool"
+          />
 
-      <Field
-        label="Tags, comma separated"
-        value={(draft.tags || []).join(', ')}
-        onChangeText={(v) => set('tags', v.split(',').map((t) => t.trim()).filter(Boolean))}
-        placeholder="work, comfy"
-      />
-      <Field
-        label="Price paid"
-        value={String(draft.price || '')}
-        onChangeText={(v) => set('price', Number(v.replace(/[^0-9.]/g, '')) || 0)}
-        keyboardType="decimal-pad"
-        placeholder="0"
-      />
+          <SlipField label="Suitable seasons" static>
+            <Row style={{ gap: 6 }}>
+              {SEASONS.map((s) => (
+                <SlipChip key={s} label={s} active={draft.seasons.includes(s)} onPress={() => toggleSeason(s)} />
+              ))}
+            </Row>
+          </SlipField>
 
-      <Stitch />
-      <Button title="Hang it up" busy={saving} onPress={save} />
-      <Button title="Start over" variant="ghost" style={{ marginTop: 10 }} onPress={onDiscard} />
+          <SlipField label={`Formality scale (${formalityDots(draft.formality)})`} static>
+            <Text style={a.slipValue}>{FORMALITY[draft.formality - 1]}</Text>
+            <Slider min={1} max={5} value={draft.formality} onChange={(v) => set('formality', v)} />
+          </SlipField>
+
+          <SlipField
+            label="Price retail"
+            tint={T.indigo}
+            value={String(draft.price || '')}
+            onChangeText={(v) => set('price', Number(v.replace(/[^0-9.]/g, '')) || 0)}
+            keyboardType="decimal-pad"
+            placeholder="0"
+          />
+
+          {/* Tags aren't in the Figma mock but the app already stores and uses
+              them for outfit matching, so they stay in the same slip pattern. */}
+          <SlipField
+            label="Tags, comma separated"
+            value={(draft.tags || []).join(', ')}
+            onChangeText={(v) => set('tags', v.split(',').map((t) => t.trim()).filter(Boolean))}
+            placeholder="work, comfy"
+          />
+        </View>
+      </View>
+
+      <Button title="Add to Closet" busy={saving} onPress={save} style={{ marginTop: 16 }} />
+      <Pressable onPress={onDiscard} style={a.backEdit}>
+        <Text style={a.backEditText}>Back to edit</Text>
+      </Pressable>
     </ScrollView>
+  );
+}
+
+/** One underlined row of the tailor's slip: mono label, value, hairline rule. */
+function SlipField({ label, children, big, tint, style, static: isStatic, ...input }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
+  return (
+    <View style={[{ gap: 4 }, style]}>
+      <Text style={a.slipLabel}>{label}</Text>
+      {isStatic ? children : (
+        <TextInput
+          placeholderTextColor={T.muted}
+          style={[a.slipInput, big && a.slipInputBig, !!tint && { color: tint }]}
+          {...input}
+        />
+      )}
+      <View style={a.slipLine} />
+    </View>
+  );
+}
+
+/** Figma's season/category chip: sits on the card, so it uses the paper fill. */
+function SlipChip({ label, active, onPress }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      style={({ pressed }) => [a.slipChip, active && a.slipChipOn, pressed && { opacity: 0.75 }]}
+    >
+      <Text style={[a.slipChipText, active && a.slipChipTextOn]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -593,20 +728,70 @@ const makeStyles = (T) => StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', borderStyle: 'dashed', borderRadius: 2,
   },
   workingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 10 },
-  match: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginTop: 10,
-    borderWidth: 1, borderColor: T.seam, borderRadius: 3, backgroundColor: T.card,
+  resultsLbl: {
+    fontFamily: FONTS.mono, fontSize: 11, lineHeight: 14, color: T.muted,
+    paddingTop: 8, paddingBottom: 8,
   },
-  swatch: { width: 34, height: 34, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
-  matchPhoto: { width: 56, height: 56, borderRadius: 3, borderWidth: 1, borderColor: T.seam },
-  matchName: { fontSize: 14, fontWeight: '600', color: T.ink },
-  matchMeta: { fontSize: 12, color: T.muted, marginTop: 2 },
-  matchSource: { fontSize: 10, color: T.muted, marginTop: 3, letterSpacing: 0, textTransform: 'uppercase' },
+  match: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginTop: 12,
+    borderWidth: 1, borderColor: T.seam, borderRadius: 8, backgroundColor: T.card,
+  },
+  matchPhoto: { width: 64, height: 64, borderRadius: 4 },
+  matchInfo: { flex: 1, gap: 2 },
+  brandBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  matchBrand: { fontFamily: FONTS.sansBold, fontSize: 12, lineHeight: 16, color: T.muted, flexShrink: 1 },
+  confBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  confDot: { width: 6, height: 6, borderRadius: 3 },
+  confText: { fontFamily: FONTS.mono, fontSize: 10, lineHeight: 13, color: T.ink },
+  matchName: { fontFamily: FONTS.display, fontSize: 16, lineHeight: 21, color: T.ink },
+  matchMaterial: { fontFamily: FONTS.sans, fontSize: 12, lineHeight: 16, color: T.muted },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  matchPrice: { fontFamily: FONTS.monoSemi, fontSize: 12, lineHeight: 16, color: T.indigo },
+  matchSource: { fontFamily: FONTS.sans, fontSize: 11, lineHeight: 14, color: T.muted, flexShrink: 1 },
   shotRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   shotThumb: { width: 64, height: 64, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
   workingText: { fontSize: 15, color: T.ink, fontWeight: '500' },
+  // Figma's draft-photo-block: a flat 220pt band in the hero tone.
   preview: {
-    alignItems: 'center', justifyContent: 'center', paddingVertical: 16, marginBottom: 10,
-    borderWidth: 1, borderColor: T.seam, borderStyle: 'dashed', borderRadius: 3, backgroundColor: T.card,
+    height: 220, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: T.heroBg, marginHorizontal: -24, marginBottom: 16,
   },
+  draftBody: { paddingHorizontal: 24, paddingTop: 0, paddingBottom: 60 },
+  // Figma's link input-box: icon + field on one bordered row.
+  inputBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 14,
+  },
+  inputBoxText: {
+    flex: 1, fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18, color: T.ink, padding: 0,
+  },
+  linkTip: { fontFamily: FONTS.sans, fontSize: 12, lineHeight: 16, color: T.muted, marginTop: 8 },
+  slipCard: {
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    padding: 16, gap: 12,
+  },
+  slipDivider: { height: 1, backgroundColor: T.seam },
+  slipRow: { flexDirection: 'row', gap: 16 },
+  slipLabel: {
+    fontFamily: FONTS.mono, fontSize: 10, lineHeight: 13, color: T.muted,
+    textTransform: 'uppercase',
+  },
+  slipInput: {
+    fontFamily: FONTS.sansSemi, fontSize: 15, lineHeight: 20, color: T.ink, padding: 0,
+  },
+  slipInputBig: { fontSize: 16, lineHeight: 21 },
+  slipValue: { fontFamily: FONTS.sansSemi, fontSize: 15, lineHeight: 20, color: T.ink },
+  slipLine: { height: 1, backgroundColor: T.seam },
+  slipChip: {
+    borderWidth: 1, borderColor: T.seam, backgroundColor: T.paper, borderRadius: 100,
+    paddingVertical: 6, paddingHorizontal: 14,
+  },
+  slipChipOn: { backgroundColor: T.indigo },
+  slipChipText: { fontFamily: FONTS.sansMedium, fontSize: 12, lineHeight: 16, color: T.ink },
+  slipChipTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
+  swatchDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: T.seam },
+  swatchDotOn: { borderWidth: 2, borderColor: T.indigo },
+  backEdit: { paddingVertical: 8, alignItems: 'center', marginTop: 12 },
+  backEditText: { fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18, color: T.muted },
 });
