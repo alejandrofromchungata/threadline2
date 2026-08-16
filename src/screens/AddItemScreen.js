@@ -11,7 +11,7 @@ import Slider from '../components/Slider';
 import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
 import Garment from '../components/Garment';
 import { cutout, tagPhoto, readProduct, tagProduct, findProduct } from '../api';
-import { prepareForUpload, saveCutout, saveRemoteImage, deleteImage } from '../services/images';
+import { prepareForUpload, saveCutout, saveRemoteCutout, deleteImage } from '../services/images';
 import { insertItem, newId } from '../db';
 import { CATEGORIES, SEASONS, FORMALITY, FONTS, formalityDots } from '../theme';
 import { useTheme } from '../ThemeContext';
@@ -275,7 +275,7 @@ function LinkFlow({ itemId, initialUrl, onReady }) {
       });
       let imageUri = null;
       if (product.image) {
-        try { imageUri = await saveRemoteImage(product.image, itemId); } catch { /* keep going */ }
+        try { imageUri = await saveRemoteCutout(product.image, itemId); } catch { /* keep going */ }
       }
       onReady({
         ...fields,
@@ -401,8 +401,8 @@ function SearchFlow({ itemId, onReady }) {
     // so a slow or blocked re-fetch below can't cost us a photo we already have.
     if (match.image) {
       const tSave = Date.now();
-      try { imageUri = await saveRemoteImage(match.image, itemId); } catch { /* try the live page next */ }
-      console.log(`[timing] choose saveRemoteImage: ${Date.now() - tSave}ms`);
+      try { imageUri = await saveRemoteCutout(match.image, itemId); } catch { /* try the live page next */ }
+      console.log(`[timing] choose saveRemoteCutout: ${Date.now() - tSave}ms`);
     }
     // Only worth visiting the page again if the search didn't already find a
     // photo — that page was just scraped moments ago during the search, so
@@ -411,7 +411,7 @@ function SearchFlow({ itemId, onReady }) {
       const tFallback = Date.now();
       try {
         const product = await readProduct(match.url);
-        if (product.image) imageUri = await saveRemoteImage(product.image, itemId);
+        if (product.image) imageUri = await saveRemoteCutout(product.image, itemId);
         if (product.price) price = product.price;
         console.log(`[timing] choose fallback readProduct: ${Date.now() - tFallback}ms`);
       } catch (e) {

@@ -1,5 +1,6 @@
 import { File, Paths, Directory } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { cutout } from '../api';
 
 const CLOSET_DIR = 'closet';
 
@@ -37,6 +38,28 @@ export async function saveRemoteImage(url, id) {
   if (dest.exists) dest.delete();
   const file = await File.downloadFileAsync(url, dest);
   return file.uri;
+}
+
+/**
+ * Download a retailer's product image and strip its background, so an imported
+ * garment sits on the card tint the same way a photographed one does instead of
+ * carrying the retailer's white studio backdrop into the closet.
+ *
+ * Falls back to the untouched download if the cut-out service is unreachable or
+ * out of credit — an import should never fail just because the background could
+ * not be removed.
+ */
+export async function saveRemoteCutout(url, id) {
+  const original = await saveRemoteImage(url, id);
+  try {
+    const { base64 } = await prepareForUpload(original);
+    const { pngBase64 } = await cutout(base64);
+    const cut = await saveCutout(pngBase64, id);
+    await deleteImage(original);
+    return cut;
+  } catch {
+    return original;
+  }
 }
 
 /** Read a local file back as base64 (for re-tagging an existing photo). */

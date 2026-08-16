@@ -10,7 +10,7 @@ export const LIGHT = {
   careStrip: '#FAF8F3',
   photoBg: '#E9E2D8',
   heroBg: '#E9E2D8',
-  cardArt: '#F7F3EB',
+  cardArt: '#E3DCCF',  // closet card art tint, chosen over Figma's paper fill
   ink: '#262322',
   muted: '#7E756F',
   indigo: '#2A3C63',
