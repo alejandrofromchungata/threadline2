@@ -64,7 +64,7 @@ export function Chip({ label, active, onPress, small, picker }) {
           heavier, but swapping the face changes the label's measured width and
           the pill visibly resizes on tap, so selection is carried by colour
           alone — the white-on-indigo fill already reads unambiguously. */}
-      <Text numberOfLines={1} style={[s.chipText, small && { fontSize: 12 }, picker && s.chipTextPicker, active && s.chipTextOn]}>
+      <Text style={[s.chipText, small && { fontSize: 12 }, picker && s.chipTextPicker, active && s.chipTextOn]}>
         {label}
       </Text>
     </Pressable>
@@ -202,8 +202,8 @@ const makeStyles = (T) => StyleSheet.create({
   chip: {
     borderWidth: 1, borderColor: T.seam, backgroundColor: T.card,
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: 100,
-    // Size to the label, never to the parent, whatever container it lands in.
-    alignSelf: 'center', flexGrow: 0, flexShrink: 0,
+    // Never shrink below the label's own width.
+    flexShrink: 0,
   },
   chipSmall: { paddingVertical: 6, paddingHorizontal: 12 },
   chipPicker: { paddingHorizontal: 16 },

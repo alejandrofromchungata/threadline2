@@ -115,20 +115,22 @@ export default function ClosetScreen({ navigation }) {
         </View>
       )}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={cs.chipRow}
-      >
-        <Chip label="All" active={cat === 'all'} onPress={() => setCat('all')} />
-        {CATEGORIES.map((c) => (
-          <Chip
-            key={c}
-            label={c[0].toUpperCase() + c.slice(1)}
-            active={cat === c}
-            onPress={() => setCat(c)}
-          />
-        ))}
+      {/* The pills live in a plain row View, exactly like every other pill row
+          in the app. Styling the ScrollView's own contentContainerStyle instead
+          let the container drive their layout, which pushed them around on
+          selection; the ScrollView now only scrolls. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={cs.chipScroller}>
+        <View style={cs.chipRow}>
+          <Chip label="All" active={cat === 'all'} onPress={() => setCat('all')} />
+          {CATEGORIES.map((c) => (
+            <Chip
+              key={c}
+              label={c[0].toUpperCase() + c.slice(1)}
+              active={cat === c}
+              onPress={() => setCat(c)}
+            />
+          ))}
+        </View>
       </ScrollView>
 
       <View style={cs.divider} />
@@ -192,12 +194,12 @@ const makeStyles = (T) => StyleSheet.create({
   },
   sortLink: { fontFamily: FONTS.sansMedium, fontSize: 12, color: T.muted },
   sortOn: { color: T.indigo, textDecorationLine: 'underline' },
-  // Must state direction and alignment explicitly. A horizontal ScrollView's
-  // content container otherwise falls back to alignItems:'stretch', which lets
-  // the pills be sized by the container instead of by their own label — the
-  // Profile chips behave because <Row> sets flexDirection:'row' itself.
+  // A horizontal ScrollView in a column parent grows to fill the leftover
+  // height unless pinned, which drags the row off its intended position.
+  chipScroller: { flexGrow: 0, flexShrink: 0 },
+  // Same shape as the shared <Row>, which is what every other pill row uses.
   chipRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', gap: 8,
     paddingLeft: 24, paddingRight: 12, paddingVertical: 12,
   },
   divider: { height: 1, backgroundColor: T.seam },
