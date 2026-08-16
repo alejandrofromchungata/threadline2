@@ -238,12 +238,12 @@ export default function OutfitScreen() {
       <View style={g.navBar}>
         <View />
         <Heading size={18}>Outfit Builder</Heading>
-        <Eyebrow>{clean.length} CLEAN</Eyebrow>
+        <Eyebrow strong>{clean.length} CLEAN</Eyebrow>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <Eyebrow tone="indigo">01 / DEFINE DESTINATION</Eyebrow>
-        <Heading size={30} style={{ marginTop: 4, marginBottom: 16 }}>Where are you headed?</Heading>
+        <Eyebrow tone="indigo" strong style={{ fontSize: 12, lineHeight: 16 }}>01 / DEFINE DESTINATION</Eyebrow>
+        <Heading size={32} style={{ marginTop: 4, marginBottom: 16, lineHeight: 43 }}>Where are you headed?</Heading>
 
         <View style={g.inputBox}>
           <SearchIcon />
@@ -257,12 +257,12 @@ export default function OutfitScreen() {
         </View>
         <Row style={{ marginTop: 12 }}>
           {QUICK.map((q) => (
-            <Chip key={q} small label={q} active={occasion === q} onPress={() => setOccasion(q)} />
+            <Chip key={q} label={q} active={occasion === q} onPress={() => setOccasion(q)} />
           ))}
         </Row>
 
         {(weather || weatherNote) && (
-          <CareCard eyebrow="02 / LOCAL CONDITIONS" accent style={{ marginTop: 20 }}>
+          <CareCard eyebrow="02 / LOCAL CONDITIONS" style={{ marginTop: 20 }}>
             {weather ? (
               <>
                 <Heading size={22}>{weather.sky}, {weather.temp}{weather.unit}</Heading>
@@ -291,11 +291,11 @@ export default function OutfitScreen() {
             <Pressable onPress={() => setOccasion(occasionFromEvent(events[0]).occasion)}>
               <Text style={g.eventTitle}>{events[0].title}</Text>
               <View style={g.timeLocationRow}>
-                <Text style={g.faint}>
+                <Text style={g.eventMeta}>
                   {events[0].start.toDateString() === new Date().toDateString() ? 'TODAY' : events[0].start.toDateString().toUpperCase()}
                   {' • '}{events[0].start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </Text>
-                {!!events[0].location && <Text style={g.wxLine}>{events[0].location.toUpperCase()}</Text>}
+                {!!events[0].location && <Text style={g.eventMetaAccent}>{events[0].location.toUpperCase()}</Text>}
               </View>
             </Pressable>
             {events.length > 1 && (
@@ -335,7 +335,7 @@ const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 10,
+    paddingHorizontal: 24, paddingVertical: 12,
   },
   backLink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   backText: { fontFamily: FONTS.sans, fontSize: 14, color: T.ink },
@@ -350,6 +350,8 @@ const makeStyles = (T) => StyleSheet.create({
   },
   inputText: { flex: 1, fontFamily: FONTS.sans, fontSize: 15, color: T.ink, padding: 0 },
   hr: { height: 1, backgroundColor: T.seam },
+  eventMeta: { fontFamily: FONTS.mono, fontSize: 11, lineHeight: 14, color: T.muted },
+  eventMetaAccent: { fontFamily: FONTS.mono, fontSize: 11, lineHeight: 14, color: T.indigo },
   wxLine: { fontFamily: FONTS.monoSemi, fontSize: 13, lineHeight: 17, color: T.indigo, letterSpacing: 0 },
   wxRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wxCondition: { flexDirection: 'row', alignItems: 'center', gap: 8 },
