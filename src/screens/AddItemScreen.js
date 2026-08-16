@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert,
 } from 'react-native';
@@ -6,13 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
 import Slider from '../components/Slider';
 import { Button, Chip, Field, Hint, Micro, Row, Stitch, Banner } from '../components/ui';
 import Garment from '../components/Garment';
 import { cutout, tagPhoto, readProduct, tagProduct, findProduct } from '../api';
 import { prepareForUpload, saveCutout, saveRemoteImage, deleteImage } from '../services/images';
 import { insertItem, newId } from '../db';
-import { T, CATEGORIES, SEASONS, FORMALITY } from '../theme';
+import { CATEGORIES, SEASONS, FORMALITY, FONTS } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 const BLANK = {
   name: '', brand: '', category: 'tops', color: '#3E5A74', colorName: '',
@@ -20,29 +22,66 @@ const BLANK = {
   imageUri: null, sourceUrl: null,
 };
 
+const SEARCH_STEPS = [
+  'Checking the brand’s own site…',
+  'Comparing other retailers…',
+  'Reading product pages for photos and price…',
+  'Matching colour, cut and details…',
+];
+
 export default function AddItemScreen({ navigation, route }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
   const shared = route.params?.sharedUrl;
-  const [mode, setMode] = useState(shared ? 'link' : 'photo');
+  const [mode, setMode] = useState(shared ? 'link' : (route.params?.initialMode || 'photo'));
   const [draft, setDraft] = useState(null);
+  const [manualEntry, setManualEntry] = useState(false);
   const [pendingId] = useState(newId());
+
+  // Figma gives each add-flow its own nav-bar wording: the blank manual form
+  // stays "Add Garment / MANUAL ENTRY", while a draft parsed from a photo,
+  // link or search becomes "Verify Care Label".
+  const headerTitle = draft
+    ? (manualEntry ? 'Add Garment' : 'Verify Care Label')
+    : (mode === 'search' ? 'Search Wardrobe' : 'Add Garment');
+  const headerMeta = draft
+    ? (manualEntry ? 'MANUAL ENTRY' : null)
+    : (mode === 'link' ? 'ADD FLOW' : null);
+  const backLabel = draft || mode === 'link' ? 'Back' : 'Closet';
 
   return (
     <SafeAreaView style={a.safe} edges={['top', 'bottom']}>
       <View style={a.head}>
-        <Text style={a.title}>Add a piece</Text>
-        <Button title="Cancel" variant="ghost" onPress={() => navigation.goBack()} />
+        <Pressable
+          onPress={async () => {
+            if (draft) { await deleteImage(draft.imageUri); setDraft(null); setManualEntry(false); }
+            else navigation.goBack();
+          }}
+          style={a.backLink}
+          hitSlop={8}
+        >
+          <Svg viewBox="0 0 24 24" width={20} height={20}>
+            <Path d="M15 5l-7 7 7 7" stroke={T.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </Svg>
+          <Text style={a.backText}>{backLabel}</Text>
+        </Pressable>
+        <Text style={a.title}>{headerTitle}</Text>
+        {headerMeta ? <Text style={a.headMeta}>{headerMeta}</Text> : null}
       </View>
 
       {!draft ? (
         <>
           <View style={a.seg}>
-            {[['photo', 'Photo'], ['search', 'Search'], ['link', 'Link'], ['manual', 'By hand']].map(([k, l]) => (
+            {[['photo', 'Photo'], ['search', 'Search'], ['link', 'Link'], ['manual', 'Manual']].map(([k, l]) => (
               <Pressable
                 key={k}
-                onPress={() => (k === 'manual' ? setDraft({ ...BLANK }) : setMode(k))}
+                onPress={() => {
+                  if (k === 'manual') { setManualEntry(true); setDraft({ ...BLANK }); }
+                  else setMode(k);
+                }}
                 style={[a.segBtn, mode === k && a.segOn]}
               >
-                <Text style={[a.segText, mode === k && { color: '#fff' }]}>{l}</Text>
+                <Text style={[a.segText, mode === k && a.segTextOn]}>{l}</Text>
               </Pressable>
             ))}
           </View>
@@ -74,6 +113,7 @@ export default function AddItemScreen({ navigation, route }) {
           onDiscard={async () => {
             await deleteImage(draft.imageUri);
             setDraft(null);
+            setManualEntry(false);
           }}
           onSave={async () => {
             // The row id is generated at insert time. pendingId names the image
@@ -89,26 +129,47 @@ export default function AddItemScreen({ navigation, route }) {
 
 /* ── Photograph → cut out → auto-tag ─────────────────────── */
 function PhotoFlow({ itemId, onReady }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState('idle');
   const [error, setError] = useState(null);
   const camera = useRef(null);
 
   const process = async (uri) => {
+    const t0 = Date.now();
     try {
       setError(null);
       setStage('cutting');
+      console.log('[timing] prepareForUpload: start');
       const { base64 } = await prepareForUpload(uri);
-      const { pngBase64 } = await cutout(base64);
-      const imageUri = await saveCutout(pngBase64, itemId);
+      console.log(`[timing] prepareForUpload: ${Date.now() - t0}ms, base64 length ${base64.length}`);
 
-      setStage('reading');
-      let fields = {};
-      try {
-        fields = await tagPhoto(pngBase64);
-      } catch {
-        setError('Saved the cut-out, but auto-tagging failed. Fill in the details below.');
-      }
+      // Cutting out the background and reading the garment don't depend on
+      // each other — running them at the same time instead of one after the
+      // other roughly halves the wait.
+      const tParallel = Date.now();
+      const [{ pngBase64 }, fields] = await Promise.all([
+        cutout(base64).then((r) => {
+          console.log(`[timing] cutout: ${Date.now() - tParallel}ms`);
+          return r;
+        }),
+        tagPhoto(base64, 'image/jpeg')
+          .then((r) => {
+            console.log(`[timing] tagPhoto: ${Date.now() - tParallel}ms`);
+            return r;
+          })
+          .catch(() => {
+            console.log(`[timing] tagPhoto: FAILED after ${Date.now() - tParallel}ms`);
+            setError('Saved the cut-out, but auto-tagging failed. Fill in the details below.');
+            return {};
+          }),
+      ]);
+      const tSave = Date.now();
+      const imageUri = await saveCutout(pngBase64, itemId);
+      console.log(`[timing] saveCutout: ${Date.now() - tSave}ms`);
+      console.log(`[timing] TOTAL photo flow: ${Date.now() - t0}ms`);
+
       onReady({ ...fields, imageUri });
     } catch (e) {
       setStage('idle');
@@ -135,7 +196,7 @@ function PhotoFlow({ itemId, onReady }) {
       <View style={a.workingBox}>
         <ActivityIndicator color={T.indigo} />
         <Text style={a.workingText}>
-          {stage === 'cutting' ? 'Cutting it off the background…' : 'Reading what it is…'}
+          Cutting it off the background and reading what it is…
         </Text>
         <Hint style={{ textAlign: 'center', marginTop: 6 }}>
           This takes a few seconds on the first photo.
@@ -177,6 +238,8 @@ function PhotoFlow({ itemId, onReady }) {
 
 /* ── Product link → scrape → tag ─────────────────────────── */
 function LinkFlow({ itemId, initialUrl, onReady }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
   const [url, setUrl] = useState(initialUrl || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -244,6 +307,8 @@ function LinkFlow({ itemId, initialUrl, onReady }) {
 
 /* ── Describe it → search the web → pick a match ─────────── */
 function SearchFlow({ itemId, onReady }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
   const [brand, setBrand] = useState('');
   const [keywords, setKeywords] = useState('');
   const [design, setDesign] = useState('');
@@ -251,6 +316,16 @@ function SearchFlow({ itemId, onReady }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [matches, setMatches] = useState(null);
+  const [searchStep, setSearchStep] = useState(0);
+
+  // The search is genuinely multi-step (checking the brand's site, comparing
+  // retailers, reading pages) and can take up to 30-45 seconds — cycle through
+  // what it's actually doing so the wait reads as progress, not a stuck spinner.
+  useEffect(() => {
+    if (!busy) { setSearchStep(0); return; }
+    const id = setInterval(() => setSearchStep((i) => (i + 1) % SEARCH_STEPS.length), 3200);
+    return () => clearInterval(id);
+  }, [busy]);
 
   const addShot = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -274,6 +349,7 @@ function SearchFlow({ itemId, onReady }) {
     setBusy(true);
     setError(null);
     setMatches(null);
+    const t0 = Date.now();
     try {
       const res = await findProduct({
         brand: brand.trim(),
@@ -281,12 +357,14 @@ function SearchFlow({ itemId, onReady }) {
         design: design.trim(),
         image: shot?.base64,
       });
+      console.log(`[timing] findProduct: ${Date.now() - t0}ms, ${res.matches?.length || 0} matches`);
       if (!res.matches?.length) {
         setError("Nothing solid came back. Add more detail, or enter it by hand below.");
       } else {
         setMatches(res.matches);
       }
     } catch (e) {
+      console.log(`[timing] findProduct: FAILED after ${Date.now() - t0}ms — ${e.message}`);
       setError(e.message || 'The search failed. Try again in a moment.');
     } finally {
       setBusy(false);
@@ -297,16 +375,29 @@ function SearchFlow({ itemId, onReady }) {
     setBusy(true);
     let imageUri = null;
     let price = match.price;
-    // If it found a real product page, pull the official photo and price from it.
-    if (match.url) {
+    const t0 = Date.now();
+    // The search already found a real photo for this match — save that first,
+    // so a slow or blocked re-fetch below can't cost us a photo we already have.
+    if (match.image) {
+      const tSave = Date.now();
+      try { imageUri = await saveRemoteImage(match.image, itemId); } catch { /* try the live page next */ }
+      console.log(`[timing] choose saveRemoteImage: ${Date.now() - tSave}ms`);
+    }
+    // Only worth visiting the page again if the search didn't already find a
+    // photo — that page was just scraped moments ago during the search, so
+    // re-visiting it here only to double check the price isn't worth the wait.
+    if (!imageUri && match.url) {
+      const tFallback = Date.now();
       try {
         const product = await readProduct(match.url);
         if (product.image) imageUri = await saveRemoteImage(product.image, itemId);
         if (product.price) price = product.price;
-      } catch {
-        /* the retailer blocked us — the details from the search still stand */
+        console.log(`[timing] choose fallback readProduct: ${Date.now() - tFallback}ms`);
+      } catch (e) {
+        console.log(`[timing] choose fallback readProduct: FAILED after ${Date.now() - tFallback}ms — ${e.message}`);
       }
     }
+    console.log(`[timing] TOTAL choose: ${Date.now() - t0}ms`);
     setBusy(false);
     onReady({ ...match, price, imageUri, sourceUrl: match.url || null });
   };
@@ -322,7 +413,11 @@ function SearchFlow({ itemId, onReady }) {
             disabled={busy}
             style={({ pressed }) => [a.match, pressed && { opacity: 0.7 }]}
           >
-            <View style={[a.swatch, { backgroundColor: m.color }]} />
+            {m.image ? (
+              <Image source={{ uri: m.image }} style={a.matchPhoto} contentFit="cover" />
+            ) : (
+              <View style={[a.swatch, { backgroundColor: m.color }]} />
+            )}
             <View style={{ flex: 1 }}>
               <Text style={a.matchName}>{m.name}</Text>
               <Text style={a.matchMeta} numberOfLines={1}>
@@ -386,6 +481,7 @@ function SearchFlow({ itemId, onReady }) {
         disabled={!keywords.trim() && !brand.trim() && !shot}
         onPress={run}
       />
+      {busy && <Micro style={{ marginTop: 10, textAlign: 'center' }}>{SEARCH_STEPS[searchStep]}</Micro>}
       {!!error && <View style={{ marginTop: 14 }}><Banner tone="error">{error}</Banner></View>}
     </ScrollView>
   );
@@ -393,6 +489,8 @@ function SearchFlow({ itemId, onReady }) {
 
 /* ── Confirm / edit before saving ────────────────────────── */
 function DraftForm({ draft, setDraft, onSave, onDiscard }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setDraft({ ...draft, [k]: v });
   const toggleSeason = (s) =>
@@ -466,21 +564,25 @@ function DraftForm({ draft, setDraft, onSave, onDiscard }) {
   );
 }
 
-const a = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   head: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 10,
+    paddingHorizontal: 24, paddingVertical: 12,
   },
-  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.6, color: T.ink },
+  backLink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: { fontFamily: FONTS.sans, fontSize: 14, color: T.ink },
+  title: { fontFamily: FONTS.display, fontSize: 18, lineHeight: 24, color: T.ink },
+  headMeta: { fontFamily: FONTS.monoSemi, fontSize: 11, lineHeight: 14, color: T.muted },
   body: { padding: 20, paddingBottom: 60 },
   seg: {
-    flexDirection: 'row', marginHorizontal: 20, borderWidth: 1, borderColor: T.seam,
-    borderRadius: 2, overflow: 'hidden', marginBottom: 4,
+    flexDirection: 'row', marginHorizontal: 24, backgroundColor: T.card,
+    borderWidth: 1, borderColor: T.seam, borderRadius: 100, padding: 4, gap: 2, marginVertical: 8,
   },
-  segBtn: { flex: 1, paddingVertical: 11, alignItems: 'center', backgroundColor: T.card },
+  segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 100 },
   segOn: { backgroundColor: T.indigo },
-  segText: { fontSize: 12, color: T.muted },
+  segText: { fontFamily: FONTS.sansMedium, fontSize: 14, lineHeight: 18, color: T.muted },
+  segTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
   segBtnTight: { paddingHorizontal: 2 },
   cameraWrap: {
     margin: 20, height: 360, borderRadius: 3, overflow: 'hidden',
@@ -496,9 +598,10 @@ const a = StyleSheet.create({
     borderWidth: 1, borderColor: T.seam, borderRadius: 3, backgroundColor: T.card,
   },
   swatch: { width: 34, height: 34, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
+  matchPhoto: { width: 56, height: 56, borderRadius: 3, borderWidth: 1, borderColor: T.seam },
   matchName: { fontSize: 14, fontWeight: '600', color: T.ink },
   matchMeta: { fontSize: 12, color: T.muted, marginTop: 2 },
-  matchSource: { fontSize: 10, color: T.muted, marginTop: 3, letterSpacing: 0.4, textTransform: 'uppercase' },
+  matchSource: { fontSize: 10, color: T.muted, marginTop: 3, letterSpacing: 0, textTransform: 'uppercase' },
   shotRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   shotThumb: { width: 64, height: 64, borderRadius: 2, borderWidth: 1, borderColor: T.seam },
   workingText: { fontSize: 15, color: T.ink, fontWeight: '500' },

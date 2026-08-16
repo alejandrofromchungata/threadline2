@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Garment from './Garment';
-import { T, FONTS, STATUS, formalityDots } from '../theme';
+import { FONTS, getStatus, formalityDots } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 const abbr = (v = '') => {
   if (!v) return '—';
@@ -11,9 +12,11 @@ const abbr = (v = '') => {
 };
 
 export default function ItemCard({ item, onPress, width }) {
+  const { T } = useTheme();
+  const c = useMemo(() => makeStyles(T), [T]);
   const [broken, setBroken] = useState(false);
   const showPhoto = item.imageUri && !broken;
-  const status = STATUS[item.status] || STATUS.clean;
+  const status = getStatus(T)[item.status] || getStatus(T).clean;
 
   return (
     <Pressable
@@ -57,33 +60,40 @@ export default function ItemCard({ item, onPress, width }) {
   );
 }
 
-const c = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   card: {
     backgroundColor: T.card, borderRadius: 8, overflow: 'hidden',
     borderWidth: 1, borderColor: T.seam,
   },
   art: {
-    height: 130, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: T.paper, position: 'relative',
+    // Figma: image-area is 173x160 inside a 173-wide card, so the art block
+    // scales with card width rather than sitting at a fixed height.
+    width: '100%', aspectRatio: 173 / 160,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: T.cardArt, position: 'relative',
   },
-  image: { width: '100%', height: 130 },
+  image: { width: '100%', height: '100%' },
   statusBadge: {
     position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: T.card, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: T.card, borderRadius: 100, paddingHorizontal: 4, paddingVertical: 4,
+    borderWidth: 1, borderColor: T.seam,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontFamily: FONTS.mono, fontSize: 8, color: T.muted, letterSpacing: 0.3 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: {
+    fontFamily: FONTS.monoSemi, fontSize: 9, lineHeight: 12, color: T.ink,
+    letterSpacing: 0, textTransform: 'lowercase',
+  },
   titleBlock: {
     paddingHorizontal: 12, paddingVertical: 12,
     borderTopWidth: 1, borderColor: T.seam,
   },
-  name: { fontFamily: FONTS.display, fontSize: 17, color: T.ink },
+  name: { fontFamily: FONTS.display, fontSize: 18, lineHeight: 24, color: T.ink },
   careStrip: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     borderTopWidth: 1, borderColor: T.seam, backgroundColor: T.careStrip,
     paddingHorizontal: 12, paddingVertical: 8,
   },
-  careText: { fontFamily: FONTS.mono, fontSize: 9, color: T.muted, flexShrink: 1 },
-  dots: { fontFamily: FONTS.monoSemi, fontSize: 9, color: T.indigo },
-  wears: { fontFamily: FONTS.mono, fontSize: 9, color: T.ink },
+  careText: { fontFamily: FONTS.mono, fontSize: 10, color: T.muted, flexShrink: 1 },
+  dots: { fontFamily: FONTS.monoSemi, fontSize: 10, color: T.indigo },
+  wears: { fontFamily: FONTS.mono, fontSize: 10, color: T.ink },
 });

@@ -47,7 +47,8 @@ export const cutout = (base64) => post('/v1/cutout', { image: base64 }, { timeou
  * Read a garment photo and infer its catalogue fields.
  * @returns {{ name, category, color, colorName, material, seasons, formality, tags }}
  */
-export const tagPhoto = (base64) => post('/v1/tag-photo', { image: base64 });
+export const tagPhoto = (base64, mediaType = 'image/jpeg') =>
+  post('/v1/tag-photo', { image: base64, mediaType });
 
 /**
  * Resolve a retailer URL into product details (title, brand, price, image).

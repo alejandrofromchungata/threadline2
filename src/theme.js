@@ -1,13 +1,16 @@
 /**
  * Design tokens pulled directly from the Figma file
- * (yBrV9irkTBm2wbnKIeSm3L). Three-font system: Cormorant Garamond for
- * display/serif headings, Geist for interface text, IBM Plex Mono for
- * data labels and eyebrow text.
+ * (yBrV9irkTBm2wbnKIeSm3L, via the Figma API — exact values, not estimated).
+ * Three-font system: Playfair Display for display/serif headings, Geist for
+ * interface text, IBM Plex Mono for data labels and eyebrow text.
  */
-export const T = {
+export const LIGHT = {
   paper: '#F7F3EB',
   card: '#FCFAF5',
   careStrip: '#FAF8F3',
+  photoBg: '#E9E2D8',
+  heroBg: '#E9E2D8',
+  cardArt: '#F7F3EB',
   ink: '#262322',
   muted: '#7E756F',
   indigo: '#2A3C63',
@@ -19,9 +22,31 @@ export const T = {
   info: '#1565C0',
 };
 
+/** Dark-mode frames from Figma (closet-main-dark, item-detail-dark, etc). Note
+ * status colours (sage/ochre/info) stay identical to light mode by design —
+ * only rust is brightened for dark-background legibility. */
+export const DARK = {
+  paper: '#1A1816',
+  card: '#2A2725',
+  careStrip: '#35312E',
+  photoBg: '#35312E',
+  heroBg: '#2A2725',
+  cardArt: '#35312E',
+  ink: '#F0EDE6',
+  muted: '#9B938A',
+  indigo: '#4A6496',
+  seam: '#3D3835',
+  seamDark: '#4C4536',
+  sage: '#2E7D32',
+  ochre: '#D84315',
+  rust: '#E53935',
+  info: '#1565C0',
+};
+
 export const FONTS = {
-  display: 'CormorantGaramond_700Bold',
-  displayRegular: 'CormorantGaramond_400Regular',
+  display: 'PlayfairDisplay_700Bold',
+  displayRegular: 'PlayfairDisplay_400Regular',
+  displayBlack: 'PlayfairDisplay_900Black',
   sans: 'Geist_400Regular',
   sansMedium: 'Geist_500Medium',
   sansSemi: 'Geist_600SemiBold',
@@ -61,12 +86,13 @@ export const CONTEXTS = [
 
 export const SEASONS = ['spring', 'summer', 'fall', 'winter'];
 
-export const STATUS = {
+/** Status labels + dot colour, resolved against whichever palette is active. */
+export const getStatus = (T) => ({
   clean: { label: 'Clean', dot: T.sage },
   dirty: { label: 'Worn', dot: T.ochre },
-  laundry: { label: 'In laundry', dot: T.rust },
-  storage: { label: 'Stored', dot: T.seamDark },
-};
+  laundry: { label: 'Laundry', dot: T.rust },
+  storage: { label: 'Storage', dot: T.seamDark },
+});
 
 export const FORMALITY = ['gym', 'casual', 'smart casual', 'business', 'formal'];
 

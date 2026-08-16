@@ -1,19 +1,37 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
-import { T, FONTS } from '../theme';
+import { FONTS } from '../theme';
+import { useTheme } from '../ThemeContext';
+
+function useUiStyles() {
+  const { T } = useTheme();
+  const s = useMemo(() => makeStyles(T), [T]);
+  return { T, s };
+}
 
 /** Small mono caps label, used as an "eyebrow" above headings and as a divider. */
-export function Eyebrow({ children, tone = 'muted', style }) {
+export function Eyebrow({ children, tone = 'muted', strong, style }) {
+  const { T, s } = useUiStyles();
   return (
-    <Text style={[s.eyebrow, tone === 'indigo' && { color: T.indigo }, style]}>
+    <Text
+      style={[
+        s.eyebrow,
+        // Figma uses IBM Plex Mono 600 for standalone markers like
+        // "OUTFIT NO. 04" and "PREFERENCES", 400 for field labels.
+        strong && { fontFamily: FONTS.monoSemi },
+        tone === 'indigo' && { color: T.indigo },
+        style,
+      ]}
+    >
       {children}
     </Text>
   );
 }
 
 export function Stitch({ label, style }) {
+  const { s } = useUiStyles();
   return (
     <View style={[s.stitchRow, style]}>
       <View style={s.stitchLine} />
@@ -23,7 +41,13 @@ export function Stitch({ label, style }) {
   );
 }
 
-export function Chip({ label, active, onPress, small }) {
+/**
+ * `picker` matches Figma's onboarding picker-chip (roomier padding, 14pt text,
+ * regular weight when unselected); the default matches the closet category
+ * pill (14pt horizontal padding, 13pt medium). Both go semibold when active.
+ */
+export function Chip({ label, active, onPress, small, picker }) {
+  const { s } = useUiStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -32,16 +56,27 @@ export function Chip({ label, active, onPress, small }) {
       style={({ pressed }) => [
         s.chip,
         small && s.chipSmall,
+        picker && s.chipPicker,
         active && s.chipOn,
         pressed && { opacity: 0.75 },
       ]}
     >
-      <Text style={[s.chipText, small && { fontSize: 12 }, active && { color: '#fff' }]}>{label}</Text>
+      <Text
+        style={[
+          s.chipText,
+          small && { fontSize: 12 },
+          picker && s.chipTextPicker,
+          active && s.chipTextOn,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 export function Button({ title, onPress, disabled, busy, variant = 'primary', style }) {
+  const { T, s } = useUiStyles();
   const isGhost = variant === 'ghost';
   const isDanger = variant === 'danger';
   const isCircle = variant === 'circle';
@@ -72,7 +107,8 @@ export function Button({ title, onPress, disabled, busy, variant = 'primary', st
 }
 
 /** Circular icon-only button, matching the quick-action row on the outfit result screen. */
-export function IconButton({ children, onPress, tint = T.ink, style }) {
+export function IconButton({ children, onPress, style }) {
+  const { s } = useUiStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -85,6 +121,7 @@ export function IconButton({ children, onPress, tint = T.ink, style }) {
 }
 
 export function Field({ label, ...props }) {
+  const { T, s } = useUiStyles();
   return (
     <View style={{ marginBottom: 12 }}>
       {!!label && <Eyebrow style={{ marginBottom: 6 }}>{label}</Eyebrow>}
@@ -93,11 +130,12 @@ export function Field({ label, ...props }) {
   );
 }
 
-export function Micro({ children, style }) {
-  return <Eyebrow style={style}>{children}</Eyebrow>;
+export function Micro({ children, strong, style }) {
+  return <Eyebrow strong={strong} style={style}>{children}</Eyebrow>;
 }
 
 export function Hint({ children, style }) {
+  const { s } = useUiStyles();
   return <Text style={[s.hint, style]}>{children}</Text>;
 }
 
@@ -105,13 +143,15 @@ export function Row({ children, style }) {
   return <View style={[{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, style]}>{children}</View>;
 }
 
-/** Display heading in Cormorant Garamond, the serif used throughout the design. */
+/** Display heading in Playfair Display, the serif used throughout the design. */
 export function Heading({ children, size = 26, style }) {
+  const { s } = useUiStyles();
   return <Text style={[s.heading, { fontSize: size }, style]}>{children}</Text>;
 }
 
 /** The bordered "care-label-card" pattern used for weather, calendar, and note blocks. */
 export function CareCard({ eyebrow, children, accent, style }) {
+  const { T, s } = useUiStyles();
   return (
     <View style={[s.careCard, accent && { borderColor: T.indigo }, style]}>
       {!!eyebrow && <Text style={[s.eyebrow, accent && { color: T.indigo }]}>{eyebrow}</Text>}
@@ -121,6 +161,7 @@ export function CareCard({ eyebrow, children, accent, style }) {
 }
 
 export function Sheet({ visible, title, onClose, children }) {
+  const { s } = useUiStyles();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={s.sheetWrap}>
@@ -140,6 +181,7 @@ export function Sheet({ visible, title, onClose, children }) {
 }
 
 export function Banner({ tone = 'info', children, action, onAction }) {
+  const { T, s } = useUiStyles();
   const tint = tone === 'warn' ? T.ochre : tone === 'error' ? T.rust : T.indigo;
   return (
     <View style={[s.banner, { borderColor: tint, backgroundColor: `${tint}12` }]}>
@@ -149,23 +191,28 @@ export function Banner({ tone = 'info', children, action, onAction }) {
   );
 }
 
-export const s = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
+  // Figma uses IBM Plex Mono 400/11, line-height 14, with no letter spacing —
+  // every text style in the file is tracked at 0.
   eyebrow: {
-    fontFamily: FONTS.monoSemi, fontSize: 11, letterSpacing: 1.2,
+    fontFamily: FONTS.mono, fontSize: 11, lineHeight: 14, letterSpacing: 0,
     textTransform: 'uppercase', color: T.muted,
   },
 
   stitchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
   stitchLine: { flex: 1, height: 1, backgroundColor: T.seam },
-  stitchLabel: { fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1.5, color: T.muted },
+  stitchLabel: { fontFamily: FONTS.mono, fontSize: 10, lineHeight: 13, letterSpacing: 0, color: T.muted },
 
   chip: {
     borderWidth: 1, borderColor: T.seam, backgroundColor: T.card,
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: 100,
   },
   chipSmall: { paddingVertical: 6, paddingHorizontal: 12 },
-  chipOn: { backgroundColor: T.indigo, borderColor: T.indigo },
-  chipText: { fontFamily: FONTS.sansMedium, fontSize: 13, color: T.ink },
+  chipPicker: { paddingHorizontal: 16 },
+  chipOn: { backgroundColor: T.indigo },
+  chipText: { fontFamily: FONTS.sansMedium, fontSize: 13, lineHeight: 17, color: T.ink },
+  chipTextPicker: { fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18 },
+  chipTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
 
   btn: {
     backgroundColor: T.indigo, paddingVertical: 15, paddingHorizontal: 20,
@@ -188,14 +235,14 @@ export const s = StyleSheet.create({
     color: T.ink, borderRadius: 8,
   },
   hint: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted, lineHeight: 19 },
-  heading: { fontFamily: FONTS.display, color: T.ink, letterSpacing: -0.3 },
+  heading: { fontFamily: FONTS.display, color: T.ink, letterSpacing: 0 },
 
   careCard: {
     borderWidth: 1, borderColor: T.seam, borderRadius: 8, backgroundColor: T.card,
     padding: 16, gap: 12,
   },
 
-  sheetWrap: { flex: 1, backgroundColor: 'rgba(38,35,34,0.45)', justifyContent: 'flex-end' },
+  sheetWrap: { flex: 1, backgroundColor: 'rgba(20,18,16,0.55)', justifyContent: 'flex-end' },
   sheet: { maxHeight: '88%', backgroundColor: T.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   sheetHead: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

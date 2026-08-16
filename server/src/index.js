@@ -46,7 +46,7 @@ export default {
       switch (pathname) {
         case '/v1/cutout':     return await cutout(body, env);
         case '/v1/tag-photo':  return await tagPhoto(body, env);
-        case '/v1/product':    return await product(body);
+        case '/v1/product':    return await product(body, env);
         case '/v1/tag-product':return await tagProduct(body, env);
         case '/v1/find':       return await find(body, env);
         case '/v1/outfit':     return await outfit(body, env);
@@ -79,7 +79,7 @@ async function rateLimit(request, env, pathname) {
 }
 
 /* ── Anthropic helpers ───────────────────────────────────── */
-async function claude(env, { system, content, maxTokens = 900, tools }) {
+async function claude(env, { system, content, maxTokens = 900, tools, effort }) {
   if (!env.ANTHROPIC_API_KEY) {
     const e = new Error('ANTHROPIC_API_KEY is not set on the worker.');
     e.status = 500;
@@ -92,6 +92,7 @@ async function claude(env, { system, content, maxTokens = 900, tools }) {
     messages: [{ role: 'user', content }],
   };
   if (tools) body.tools = tools;
+  if (effort) body.output_config = { effort };
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -122,7 +123,11 @@ function parseJson(text) {
   } catch {
     const start = clean.search(/[[{]/);
     const end = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']'));
-    if (start !== -1 && end > start) return JSON.parse(clean.slice(start, end + 1));
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(clean.slice(start, end + 1));
+      } catch { /* fall through to the friendly error below */ }
+    }
     const e = new Error('The model returned something unreadable. Try again.');
     e.status = 502;
     throw e;
@@ -187,13 +192,14 @@ async function cutout({ image }, env) {
 }
 
 /* ── /v1/tag-photo — vision auto-tagging ─────────────────── */
-async function tagPhoto({ image }, env) {
+async function tagPhoto({ image, mediaType }, env) {
   if (!image) return fail('No image supplied.');
+  const media_type = mediaType === 'image/png' ? 'image/png' : 'image/jpeg';
   const text = await claude(env, {
     system: 'You catalogue clothing for a wardrobe app. You reply with JSON only — no prose, no code fences.',
     maxTokens: 500,
     content: [
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: image } },
+      { type: 'image', source: { type: 'base64', media_type, data: image } },
       {
         type: 'text',
         text:
@@ -206,108 +212,147 @@ async function tagPhoto({ image }, env) {
 }
 
 /* ── page scraping, shared by /v1/product and /v1/find ───── */
-async function scrapeProduct(url, { timeout = 8000 } = {}) {
+// Some retailers block plain server requests, or only add the product image
+// via JavaScript after the page loads. When SCRAPER_API_KEY is set, route the
+// fetch through ScraperAPI instead — it fetches from a residential IP and can
+// render the page's JavaScript, so it also picks up those JS-injected images.
+// Without a key configured, this falls back to fetching the page directly.
+async function scrapeProduct(url, env, { timeout = 8000 } = {}) {
   const empty = {
     title: '', brand: '', description: '', price: 0, currency: '',
     image: null, url, blocked: true,
   };
   if (!url || !/^https?:\/\//i.test(url)) return empty;
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
+  const viaScraperApi = Boolean(env?.SCRAPER_API_KEY);
 
-  let page;
-  try {
-    page = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-      },
-      redirect: 'follow',
-      signal: ctrl.signal,
-      cf: { cacheTtl: 300 },
-    });
-  } catch {
-    return empty;
-  } finally {
-    clearTimeout(timer);
-  }
+  // One fetch-and-parse attempt. `premium` routes through ScraperAPI's
+  // residential-IP pool instead of its cheaper datacenter one — it costs far
+  // more credits, so it's only worth trying when the cheap attempt failed.
+  // Returns null (not `empty`) on any failure so the caller can decide whether
+  // to retry, rather than the empty shell short-circuiting that decision.
+  const attempt = async (premium) => {
+    // ScraperAPI adds its own fetch overhead on top of ours — give it more room
+    // than a direct fetch needs, even more so for a slower premium request.
+    const effectiveTimeout = viaScraperApi ? Math.max(timeout, premium ? 20000 : 12000) : timeout;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), effectiveTimeout);
 
-  if (!page.ok) return empty;
+    // No `render`: retailers put the product image in a plain <meta og:image>
+    // tag for SEO, present in the raw HTML — paying for JS rendering to get it
+    // only adds latency for no benefit.
+    const fetchUrl = viaScraperApi
+      ? `https://api.scraperapi.com/?api_key=${env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}${premium ? '&premium=true' : ''}`
+      : url;
 
-  const found = { meta: {}, ldjson: [] };
-  const rewriter = new HTMLRewriter()
-    .on('meta', {
-      element(el) {
-        const key = el.getAttribute('property') || el.getAttribute('name');
-        const value = el.getAttribute('content');
-        if (key && value) found.meta[key.toLowerCase()] = value;
-      },
-    })
-    .on('script[type="application/ld+json"]', {
-      text(chunk) {
-        found.buffer = (found.buffer || '') + chunk.text;
-        if (chunk.lastInTextNode) {
-          found.ldjson.push(found.buffer);
-          found.buffer = '';
-        }
-      },
-    });
-
-  try {
-    await rewriter.transform(page).arrayBuffer();
-  } catch {
-    return empty;
-  }
-
-  let node = null;
-  for (const raw of found.ldjson) {
+    let page;
     try {
-      const parsed = JSON.parse(raw.trim());
-      const nodes = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] || [])];
-      const hit = nodes.find(
-        (n) => n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product')))
-      );
-      if (hit) { node = hit; break; }
-    } catch { /* malformed block, keep looking */ }
-  }
+      page = await fetch(fetchUrl, {
+        headers: viaScraperApi
+          ? {}
+          : {
+              'User-Agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Upgrade-Insecure-Requests': '1',
+              'Sec-Fetch-Dest': 'document',
+              'Sec-Fetch-Mode': 'navigate',
+              'Sec-Fetch-Site': 'none',
+            },
+        redirect: 'follow',
+        signal: ctrl.signal,
+        cf: { cacheTtl: 300 },
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
 
-  const m = found.meta;
-  const offers = node?.offers ? (Array.isArray(node.offers) ? node.offers[0] : node.offers) : null;
-  const rawImage =
-    (Array.isArray(node?.image) ? node.image[0] : typeof node?.image === 'string' ? node.image : null) ||
-    m['og:image'] || m['twitter:image'] || null;
+    if (!page.ok) return null;
+    // ScraperAPI's own response URL isn't the retailer's page, so keep using the
+    // original URL as the base for resolving relative image paths below.
+    const baseUrl = viaScraperApi ? url : page.url;
 
-  const title = node?.name || m['og:title'] || m['twitter:title'] || '';
-  if (!title) return empty;
+    const found = { meta: {}, ldjson: [] };
+    const rewriter = new HTMLRewriter()
+      .on('meta', {
+        element(el) {
+          const key = el.getAttribute('property') || el.getAttribute('name');
+          const value = el.getAttribute('content');
+          if (key && value) found.meta[key.toLowerCase()] = value;
+        },
+      })
+      .on('script[type="application/ld+json"]', {
+        text(chunk) {
+          found.buffer = (found.buffer || '') + chunk.text;
+          if (chunk.lastInTextNode) {
+            found.ldjson.push(found.buffer);
+            found.buffer = '';
+          }
+        },
+      });
 
-  let image = null;
-  if (rawImage) {
-    try { image = new URL(rawImage, page.url).toString(); } catch { image = null; }
-  }
+    try {
+      await rewriter.transform(page).arrayBuffer();
+    } catch {
+      return null;
+    }
 
-  return {
-    title,
-    brand: (typeof node?.brand === 'object' ? node.brand?.name : node?.brand) || m['og:site_name'] || '',
-    description: (node?.description || m['og:description'] || m.description || '').slice(0, 600),
-    price: Number(offers?.price || m['product:price:amount'] || 0) || 0,
-    currency: offers?.priceCurrency || m['product:price:currency'] || '',
-    image,
-    url: page.url,
-    blocked: false,
+    let node = null;
+    for (const raw of found.ldjson) {
+      try {
+        const parsed = JSON.parse(raw.trim());
+        const nodes = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] || [])];
+        const hit = nodes.find(
+          (n) => n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product')))
+        );
+        if (hit) { node = hit; break; }
+      } catch { /* malformed block, keep looking */ }
+    }
+
+    const m = found.meta;
+    const offers = node?.offers ? (Array.isArray(node.offers) ? node.offers[0] : node.offers) : null;
+    const rawImage =
+      (Array.isArray(node?.image) ? node.image[0] : typeof node?.image === 'string' ? node.image : null) ||
+      m['og:image'] || m['twitter:image'] || null;
+
+    const title = node?.name || m['og:title'] || m['twitter:title'] || '';
+    if (!title) return null;
+
+    let image = null;
+    if (rawImage) {
+      try { image = new URL(rawImage, baseUrl).toString(); } catch { image = null; }
+    }
+
+    return {
+      title,
+      brand: (typeof node?.brand === 'object' ? node.brand?.name : node?.brand) || m['og:site_name'] || '',
+      description: (node?.description || m['og:description'] || m.description || '').slice(0, 600),
+      price: Number(offers?.price || m['product:price:amount'] || 0) || 0,
+      currency: offers?.priceCurrency || m['product:price:currency'] || '',
+      image,
+      url: baseUrl,
+      blocked: false,
+    };
   };
+
+  const cheap = await attempt(false);
+  if (cheap) return cheap;
+
+  if (viaScraperApi) {
+    const premium = await attempt(true);
+    if (premium) return premium;
+  }
+
+  return empty;
 }
 
 /* ── /v1/product — read a retailer page ──────────────────── */
-async function product({ url }) {
+async function product({ url }, env) {
   if (!url || !/^https?:\/\//i.test(url)) return fail('Send a full http(s) product URL.');
-  return json(await scrapeProduct(url));
+  return json(await scrapeProduct(url, env));
 }
 
 /* ── /v1/tag-product — classify scraped text ─────────────── */
@@ -392,8 +437,11 @@ async function find(body, env) {
     type: 'text',
     text:
       `Find this specific clothing item for sale online.\n\n${described}\n` +
-      `Search the web. Prefer the brand's own site, then large retailers. If you cannot find the ` +
-      `exact piece, return the closest genuine matches you did find — never invent a product or a URL.\n\n` +
+      `Search the web. Prefer the brand's own site, then large retailers. Issue your searches together in ` +
+      `the same turn rather than one at a time — e.g. the brand's own site, and 1-2 large retailers, all at ` +
+      `once — instead of waiting for one search's results before starting the next; you already know enough ` +
+      `from the description to pick those queries upfront. If you cannot find the exact piece, return the ` +
+      `closest genuine matches you did find — never invent a product or a URL.\n\n` +
       `Reply with ONLY JSON, no prose, no fences:\n` +
       `{"matches":[{"name":string (2-6 words),"brand":string,"price":number (0 if unknown),` +
       `"url":string (the product page you actually found, or ""),"source":string (site name),` +
@@ -410,7 +458,8 @@ async function find(body, env) {
       'You never fabricate products or URLs. You reply with JSON only — no prose, no code fences.',
     maxTokens: 2000,
     content,
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+    effort: 'medium',
   });
 
   const parsed = parseJson(text);
@@ -426,7 +475,7 @@ async function find(body, env) {
   const enriched = await Promise.all(
     matches.map(async (m) => {
       if (!m.url) return { ...m, image: null, verified: false };
-      const page = await scrapeProduct(m.url, { timeout: 6000 });
+      const page = await scrapeProduct(m.url, env, { timeout: 6000 });
       return {
         ...m,
         image: page.image,

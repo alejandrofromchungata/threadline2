@@ -1,22 +1,44 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
 import Garment from '../components/Garment';
-import { Button, Chip, Row, Stitch, Micro, Hint } from '../components/ui';
-import { getItem, updateItem, deleteItem } from '../db';
+import { Micro } from '../components/ui';
+import { getItem, getItemNumber, updateItem, deleteItem } from '../db';
 import { deleteImage } from '../services/images';
-import { T, STATUS, FORMALITY } from '../theme';
+import { getStatus, formalityDots, FORMALITY, FONTS } from '../theme';
+import { useTheme } from '../ThemeContext';
+
+const STATUS_ORDER = ['clean', 'dirty', 'laundry', 'storage'];
+
+function BackArrow({ color }) {
+  return (
+    <Svg viewBox="0 0 24 24" width={20} height={20}>
+      <Path d="M15 5l-7 7 7 7" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
 
 export default function ItemDetailScreen({ route, navigation }) {
+  const { T } = useTheme();
+  const d = useMemo(() => makeStyles(T), [T]);
   const { id } = route.params;
   const [item, setItem] = useState(null);
+  const [number, setNumber] = useState(null);
 
-  useEffect(() => { getItem(id).then(setItem); }, [id]);
+  useEffect(() => {
+    getItem(id).then(setItem);
+    getItemNumber(id).then(setNumber);
+  }, [id]);
 
   if (!item) return <SafeAreaView style={d.safe} />;
 
   const cpw = item.price ? (item.price / Math.max(item.wears, 1)).toFixed(2) : null;
+  const statusMap = getStatus(T);
+  const suitability = (item.seasons || []).map((s) => s[0].toUpperCase()).join(' / ') || '—';
+  const formalityLabel = FORMALITY[item.formality - 1] || '';
+  const lastWorn = item.lastWorn ? `Last: ${item.lastWorn}` : 'Never worn';
 
   const setStatus = async (status) => {
     await updateItem(id, { status });
@@ -40,72 +62,138 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={d.safe} edges={['top', 'bottom']}>
-      <View style={d.head}>
-        <Button title="Back" variant="ghost" onPress={() => navigation.goBack()} />
+      <View style={d.navBar}>
+        <Pressable onPress={() => navigation.goBack()} style={d.backLink} hitSlop={8}>
+          <BackArrow color={T.ink} />
+          <Text style={d.backText}>Closet</Text>
+        </Pressable>
+        <Text style={d.catalogNumber}>{`NO. ${String(number || 1).padStart(4, '0')}`}</Text>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-        <View style={d.art}>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={d.imageBlock}>
           {item.imageUri ? (
-            <Image source={{ uri: item.imageUri }} style={{ width: 220, height: 220 }} contentFit="contain" />
+            <Image source={{ uri: item.imageUri }} style={{ width: '100%', height: 280 }} contentFit="contain" />
           ) : (
             <Garment category={item.category} color={item.color} size={190} />
           )}
         </View>
 
-        <Text style={d.brand}>{item.brand || 'No brand'}</Text>
-        <Text style={d.name}>{item.name}</Text>
+        <View style={d.labelSpecs}>
+          <View style={d.detailHeader}>
+            <Micro>Garment description</Micro>
+            <Text style={d.name}>{item.name}</Text>
+          </View>
 
-        <View style={d.specs}>
-          <Spec label="Category" value={item.category} />
-          <Spec label="Colour" value={item.colorName || '—'} />
-          <Spec label="Material" value={item.material || '—'} />
-          <Spec label="Formality" value={FORMALITY[item.formality - 1]} />
-          <Spec label="Season" value={(item.seasons || []).join(', ') || 'any'} />
-          <Spec label="Worn" value={`${item.wears} times`} />
-          <Spec label="Cost per wear" value={cpw ? `${cpw}` : '—'} />
-          <Spec label="Last worn" value={item.lastWorn || 'never'} />
+          <View style={d.divider} />
+
+          <View style={{ gap: 12 }}>
+            <View style={d.specRow}>
+              <Spec label="Brand" value={item.brand || '—'} />
+              <Spec label="Fabric/Comp" value={item.material || '—'} />
+            </View>
+            <View style={d.specRow}>
+              <Spec label="Formality" value={`${formalityDots(item.formality)}${formalityLabel ? ` (${formalityLabel})` : ''}`} />
+              <Spec label="Suitability" value={suitability} />
+            </View>
+            <View style={d.specRow}>
+              <Spec label="Wear statistics" value={`${item.wears} wears · ${lastWorn}`} />
+              <Spec label="Cost per wear" value={cpw ? `${cpw}${item.price ? ` (${item.price} retail)` : ''}` : '—'} tint={T.indigo} />
+            </View>
+            {/* Category and colour aren't in the Figma mock, but they're real
+                catalogue fields the app already shows — kept in the same spec pattern. */}
+            <View style={d.specRow}>
+              <Spec label="Category" value={item.category} />
+              <Spec label="Colour" value={item.colorName || '—'} />
+            </View>
+          </View>
+
+          {!!(item.tags || []).length && (
+            <View style={d.tagsRow}>
+              {item.tags.map((t) => (
+                <View key={t} style={d.tagPill}><Text style={d.tagText}>{t}</Text></View>
+              ))}
+            </View>
+          )}
+
+          <View style={d.divider} />
+
+          <View style={{ gap: 8 }}>
+            <Micro>Current piece status</Micro>
+            <View style={d.segmented}>
+              {STATUS_ORDER.map((k) => {
+                const active = item.status === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => setStatus(k)}
+                    style={[d.segment, active && d.segmentOn]}
+                  >
+                    <Text style={[d.segmentText, active && d.segmentTextOn]}>{statusMap[k].label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={d.statusHint}>Only clean pieces are offered when Threadline builds an outfit.</Text>
+          </View>
         </View>
-
-        {!!(item.tags || []).length && (
-          <Row style={{ marginTop: 14 }}>
-            {item.tags.map((t) => <Chip key={t} small label={t} />)}
-          </Row>
-        )}
-
-        <Stitch label="STATUS" />
-        <Row>
-          {Object.entries(STATUS).map(([k, v]) => (
-            <Chip key={k} small label={v.label} active={item.status === k} onPress={() => setStatus(k)} />
-          ))}
-        </Row>
-        <Hint style={{ marginTop: 10 }}>
-          Only clean pieces are offered when Threadline builds an outfit.
-        </Hint>
-
-        <Button title="Remove from closet" variant="danger" style={{ marginTop: 28 }} onPress={confirmDelete} />
       </ScrollView>
+
+      <View style={d.footer}>
+        <View style={d.divider} />
+        <Pressable onPress={confirmDelete} style={d.removeBtn}>
+          <Text style={d.removeText}>Remove from Closet</Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
 
-function Spec({ label, value }) {
+function Spec({ label, value, tint }) {
+  const { T } = useTheme();
   return (
-    <View style={{ width: '48%', marginBottom: 14 }}>
+    <View style={{ width: '48%', gap: 2 }}>
       <Micro>{label}</Micro>
-      <Text style={{ fontSize: 14, color: T.ink }}>{value}</Text>
+      <Text style={{ fontFamily: FONTS.sansSemi, fontSize: 15, lineHeight: 20, color: tint || T.ink }}>{value}</Text>
     </View>
   );
 }
 
-const d = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
-  head: { paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row' },
-  art: {
-    alignItems: 'center', justifyContent: 'center', paddingVertical: 20,
-    borderWidth: 1, borderColor: T.seam, borderStyle: 'dashed', borderRadius: 3,
-    backgroundColor: T.card, marginBottom: 18,
+  navBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 24, paddingVertical: 12,
   },
-  brand: { fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: T.muted },
-  name: { fontSize: 24, fontWeight: '700', letterSpacing: -0.6, color: T.ink, marginTop: 4, marginBottom: 18 },
-  specs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  backLink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: { fontFamily: FONTS.sans, fontSize: 14, color: T.ink },
+  catalogNumber: { fontFamily: FONTS.monoSemi, fontSize: 14, color: T.muted },
+  imageBlock: {
+    height: 280, alignItems: 'center', justifyContent: 'center', backgroundColor: T.heroBg,
+    borderBottomWidth: 1, borderColor: T.seam,
+  },
+  labelSpecs: { backgroundColor: T.card, padding: 24, gap: 20 },
+  detailHeader: { gap: 4 },
+  name: { fontFamily: FONTS.display, fontSize: 28, lineHeight: 37, color: T.ink },
+  divider: { height: 1, backgroundColor: T.seam },
+  specRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  segmented: {
+    flexDirection: 'row', backgroundColor: T.paper, borderRadius: 8, padding: 4, gap: 2,
+  },
+  segment: {
+    flex: 1, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 6,
+  },
+  segmentOn: { backgroundColor: T.card, borderWidth: 1, borderColor: T.seam },
+  segmentText: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted },
+  segmentTextOn: { fontFamily: FONTS.sansSemi, color: T.indigo },
+  statusHint: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted, lineHeight: 19, marginTop: 2 },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tagPill: {
+    borderWidth: 1, borderColor: T.seam, backgroundColor: T.card,
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 100,
+  },
+  tagText: { fontFamily: FONTS.sansMedium, fontSize: 12, color: T.ink },
+  footer: { paddingHorizontal: 24, paddingBottom: 20, paddingTop: 12, gap: 12 },
+  removeBtn: { height: 44, alignItems: 'center', justifyContent: 'center' },
+  removeText: { fontFamily: FONTS.sansSemi, fontSize: 14, color: T.rust },
 });

@@ -9,7 +9,8 @@ import ItemCard from '../components/ItemCard';
 import { Chip, Button, Hint, Eyebrow, Heading } from '../components/ui';
 import Garment from '../components/Garment';
 import { listItems } from '../db';
-import { T, FONTS, CATEGORIES } from '../theme';
+import { FONTS, CATEGORIES } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 const SORTS = [
   ['recent', 'added'],
@@ -19,6 +20,7 @@ const SORTS = [
 ];
 
 function NeedleMark() {
+  const { T } = useTheme();
   return (
     <Svg viewBox="0 0 24 24" width={22} height={22}>
       <Path d="M6 18l9-13" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" />
@@ -29,6 +31,7 @@ function NeedleMark() {
 }
 
 function FilterIcon() {
+  const { T } = useTheme();
   return (
     <Svg viewBox="0 0 24 24" width={19} height={19}>
       <Path d="M4 6h16M7 12h10M10 18h4" stroke={T.ink} strokeWidth={1.8} strokeLinecap="round" />
@@ -37,6 +40,7 @@ function FilterIcon() {
 }
 
 function SearchIcon() {
+  const { T } = useTheme();
   return (
     <Svg viewBox="0 0 24 24" width={19} height={19}>
       <Circle cx={11} cy={11} r={7} stroke={T.ink} strokeWidth={1.8} fill="none" />
@@ -46,6 +50,8 @@ function SearchIcon() {
 }
 
 export default function ClosetScreen({ navigation }) {
+  const { T } = useTheme();
+  const cs = useMemo(() => makeStyles(T), [T]);
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -181,14 +187,14 @@ export default function ClosetScreen({ navigation }) {
   );
 }
 
-const cs = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   brandBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
+    paddingHorizontal: 24, paddingVertical: 12,
   },
   brandLogo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wordmark: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  wordmark: { fontFamily: FONTS.displayBlack, fontSize: 22, color: T.indigo },
   actionIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   search: {
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
@@ -200,7 +206,7 @@ const cs = StyleSheet.create({
   },
   sortLink: { fontFamily: FONTS.sansMedium, fontSize: 12, color: T.muted },
   sortOn: { color: T.indigo, textDecorationLine: 'underline' },
-  chipRow: { gap: 8, paddingHorizontal: 20, paddingVertical: 12 },
+  chipRow: { gap: 8, paddingLeft: 24, paddingRight: 12, paddingVertical: 12 },
   divider: { height: 1, backgroundColor: T.seam },
   empty: { padding: 40, alignItems: 'center' },
 });

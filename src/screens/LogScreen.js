@@ -1,22 +1,24 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
 import { Button, Stitch, Micro, Hint, Banner } from '../components/ui';
-import PackingSheet from '../components/PackingSheet';
 import { findGaps } from '../api';
 import { listItems, listWearLog, washAll, getSetting } from '../db';
 import { cancelLaundryReminder } from '../services/notifications';
-import { T } from '../theme';
+import { FONTS } from '../theme';
+import { useTheme } from '../ThemeContext';
 
-export default function LogScreen() {
+export default function LogScreen({ navigation }) {
+  const { T } = useTheme();
+  const l = useMemo(() => makeStyles(T), [T]);
   const [items, setItems] = useState([]);
   const [log, setLog] = useState([]);
   const [profile, setProfile] = useState({ styles: [], contexts: [] });
   const [gaps, setGaps] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [packing, setPacking] = useState(false);
 
   const load = useCallback(async () => {
     const [rows, entries, prof] = await Promise.all([
@@ -67,65 +69,58 @@ export default function LogScreen() {
     <SafeAreaView style={l.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
         <View style={l.head}>
-          <Text style={l.title}>Log</Text>
-          <Text style={l.count}>{log.length} days recorded</Text>
+          <Text style={l.title}>Wardrobe Log & Metrics</Text>
+          <Micro>{log.length} days recorded</Micro>
         </View>
 
         {dirty.length > 0 && (
-          <Banner tone="warn" action="Mark washed" onAction={wash}>
-            <View>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: T.ink }}>
-                {dirty.length} pieces in the worn pile
-              </Text>
-              <Text style={{ fontSize: 12, color: T.muted, marginTop: 2 }} numberOfLines={2}>
+          <View style={l.laundryCard}>
+            <Micro>Washing deck · Laundry time</Micro>
+            <Text style={l.laundryTitle}>{`Laundry pile: ${dirty.length} ${dirty.length === 1 ? 'piece' : 'pieces'}`}</Text>
+            <View style={l.hr} />
+            <View style={l.laundryRow}>
+              <Text style={l.laundryHint} numberOfLines={2}>
                 {dirty.slice(0, 3).map((i) => i.name).join(', ')}{dirty.length > 3 ? '…' : ''}
               </Text>
+              <Button title="Mark All Clean" onPress={wash} style={{ paddingVertical: 8, paddingHorizontal: 12, minHeight: 0 }} />
             </View>
-          </Banner>
+          </View>
         )}
 
-        <Stitch label="WHAT YOU WORE" />
-        {log.length === 0 ? (
-          <Hint>Nothing logged yet. Build an outfit and tap “Wearing this today”.</Hint>
-        ) : (
-          log.map((entry) => (
-            <View key={entry.id} style={l.logRow}>
-              <Text style={l.logDate}>{entry.date.slice(5)}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={l.logName}>{entry.name}</Text>
-                <Text style={l.logSub} numberOfLines={2}>
-                  {entry.occasion} · {entry.itemIds.map(nameOf).filter(Boolean).join(' + ')}
-                </Text>
-              </View>
-            </View>
-          ))
-        )}
-
-        <Stitch label="WEAR & WORTH" />
-        <View style={l.totals}>
-          <View>
+        <View style={l.statsRow}>
+          <View style={l.statCard}>
             <Micro>Closet value</Micro>
-            <Text style={l.big}>{Math.round(totalSpend)}</Text>
+            <Text style={l.statValue}>{Math.round(totalSpend)}</Text>
           </View>
-          <View>
+          <View style={l.statCard}>
             <Micro>Total wears</Micro>
-            <Text style={l.big}>{totalWears}</Text>
+            <Text style={l.statValue}>{totalWears}</Text>
           </View>
-          <View>
-            <Micro>Average per wear</Micro>
-            <Text style={l.big}>{totalWears ? (totalSpend / totalWears).toFixed(2) : '—'}</Text>
+          <View style={l.statCard}>
+            <Micro>Avg CPW</Micro>
+            <Text style={l.statValue}>{totalWears ? (totalSpend / totalWears).toFixed(2) : '—'}</Text>
           </View>
         </View>
 
         {!!most.length && (
           <>
-            <Micro style={{ marginTop: 18 }}>Earning their keep</Micro>
+            <Micro style={{ marginTop: 4, marginBottom: 10 }}>Most worn pieces</Micro>
             {most.map((i) => (
-              <View key={i.id} style={l.statRow}>
-                <Text style={l.statName} numberOfLines={1}>{i.name}</Text>
-                <Text style={l.statVal}>
-                  {i.price ? `${(i.price / Math.max(i.wears, 1)).toFixed(2)}/wear` : `${i.wears} wears`}
-                </Text>
+              <View key={i.id} style={l.wornRow}>
+                {i.imageUri ? (
+                  <Image source={{ uri: i.imageUri }} style={l.wornImg} contentFit="cover" />
+                ) : (
+                  <View style={[l.wornImg, { backgroundColor: T.cardArt }]} />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={l.wornName} numberOfLines={1}>{i.name}</Text>
+                  <View style={l.wornMetrics}>
+                    <Text style={l.wornWears}>{`${i.wears} wears`}</Text>
+                    <Text style={l.statVal}>
+                      {i.price ? `${(i.price / Math.max(i.wears, 1)).toFixed(2)}/wear` : '—'}
+                    </Text>
+                  </View>
+                </View>
               </View>
             ))}
           </>
@@ -144,30 +139,69 @@ export default function LogScreen() {
           </>
         )}
 
+        <Stitch label="WHAT YOU WORE" />
+        {log.length === 0 ? (
+          <Hint>Nothing logged yet. Build an outfit and tap "Wearing this today".</Hint>
+        ) : (
+          log.map((entry) => (
+            <View key={entry.id} style={l.logRow}>
+              <Text style={l.logDate}>{entry.date.slice(5)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={l.logName}>{entry.name}</Text>
+                <Text style={l.logSub} numberOfLines={2}>
+                  {entry.occasion} · {entry.itemIds.map(nameOf).filter(Boolean).join(' + ')}
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
+
         <Stitch label="WHAT'S MISSING" />
-        <Button title={busy ? 'Reading your closet…' : 'Find the gaps'} variant="ghost" busy={busy} onPress={runGaps} />
-        {!!error && <View style={{ marginTop: 12 }}><Banner tone="error">{error}</Banner></View>}
-        {gaps?.map((gp, n) => (
-          <View key={n} style={l.gapRow}>
-            <Text style={l.gapTitle}>{gp.gap}</Text>
-            <Text style={l.logSub}>{gp.why}</Text>
+        {gaps?.length ? (
+          <View style={l.gapCard}>
+            <Micro style={{ color: T.indigo }}>Wardrobe gap report</Micro>
+            <Text style={l.gapCardTitle}>Identified stitch gaps:</Text>
+            <Text style={l.gapCardText}>{gaps.map((g) => g.gap).join('; ')}.</Text>
           </View>
-        ))}
+        ) : (
+          <Button title={busy ? 'Reading your closet…' : 'Find the gaps'} variant="ghost" busy={busy} onPress={runGaps} />
+        )}
+        {!!error && <View style={{ marginTop: 12 }}><Banner tone="error">{error}</Banner></View>}
 
         <Stitch label="GOING SOMEWHERE" />
-        <Button title="Build a packing list" variant="ghost" onPress={() => setPacking(true)} />
+        <Button title="Build a packing list" variant="ghost" onPress={() => navigation.navigate('Packing')} />
       </ScrollView>
-
-      <PackingSheet visible={packing} onClose={() => setPacking(false)} items={items} />
     </SafeAreaView>
   );
 }
 
-const l = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
-  head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 },
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.9, color: T.ink },
+  head: { marginBottom: 16, gap: 4 },
+  title: { fontFamily: FONTS.display, fontSize: 22, color: T.ink },
   count: { fontSize: 11, color: T.muted },
+  laundryCard: {
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    padding: 16, gap: 8, marginBottom: 16,
+  },
+  laundryTitle: { fontFamily: FONTS.display, fontSize: 22, color: T.ink },
+  hr: { height: 1, backgroundColor: T.seam },
+  laundryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  laundryHint: { flex: 1, fontFamily: FONTS.sans, fontSize: 13, color: T.muted },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  statCard: {
+    flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    padding: 12, gap: 4,
+  },
+  statValue: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  wornRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, marginBottom: 8,
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+  },
+  wornImg: { width: 40, height: 40, borderRadius: 4 },
+  wornName: { fontFamily: FONTS.display, fontSize: 15, color: T.ink },
+  wornMetrics: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  wornWears: { fontFamily: FONTS.monoSemi, fontSize: 11, color: T.indigo },
   logRow: {
     flexDirection: 'row', gap: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed',
@@ -175,14 +209,16 @@ const l = StyleSheet.create({
   logDate: { fontSize: 11, color: T.muted, width: 44, paddingTop: 2 },
   logName: { fontSize: 14, fontWeight: '500', color: T.ink },
   logSub: { fontSize: 12, color: T.muted, marginTop: 2, lineHeight: 17 },
-  totals: { flexDirection: 'row', justifyContent: 'space-between' },
-  big: { fontSize: 20, fontWeight: '700', color: T.ink },
   statRow: {
     flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 7,
     borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed',
   },
   statName: { fontSize: 13, color: T.ink, flex: 1 },
   statVal: { fontSize: 11, color: T.muted },
-  gapRow: { paddingVertical: 10, borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed' },
-  gapTitle: { fontSize: 14, fontWeight: '600', color: T.ink },
+  gapCard: {
+    backgroundColor: T.paper, borderWidth: 2, borderColor: T.indigo, borderRadius: 8,
+    padding: 16, gap: 8,
+  },
+  gapCardTitle: { fontFamily: FONTS.display, fontSize: 18, color: T.ink },
+  gapCardText: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted, lineHeight: 18 },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Pressable } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,8 +10,8 @@ import * as Notifications from 'expo-notifications';
 import { useShareIntent } from 'expo-share-intent';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
-import { useFonts, CormorantGaramond_700Bold, CormorantGaramond_400Regular }
-  from '@expo-google-fonts/cormorant-garamond';
+import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_900Black }
+  from '@expo-google-fonts/playfair-display';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold }
   from '@expo-google-fonts/geist';
 import { IBMPlexMono_400Regular, IBMPlexMono_600SemiBold }
@@ -23,9 +23,11 @@ import LogScreen from './src/screens/LogScreen';
 import StyleScreen from './src/screens/StyleScreen';
 import AddItemScreen from './src/screens/AddItemScreen';
 import ItemDetailScreen from './src/screens/ItemDetailScreen';
+import PackingScreen from './src/screens/PackingScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { getDb, getSetting } from './src/db';
-import { T, FONTS } from './src/theme';
+import { FONTS } from './src/theme';
+import { ThemeProvider, useTheme } from './src/ThemeContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -35,7 +37,7 @@ export const navRef = createNavigationContainerRef();
 
 /** Icon set matching the Figma tab bar: layers, sparkles, calendar-check, user. */
 function TabIcon({ name, color }) {
-  const p = { stroke: color, strokeWidth: 1.8, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
+  const p = { stroke: color, strokeWidth: 2, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
   const shapes = {
     Closet: (
       <>
@@ -66,6 +68,8 @@ function TabIcon({ name, color }) {
 }
 
 function AddTabButton({ onPress }) {
+  const { T } = useTheme();
+  const tb = useMemo(() => makeTbStyles(T), [T]);
   return (
     <Pressable onPress={onPress} style={tb.addWrap} accessibilityRole="button" accessibilityLabel="Add a piece">
       <View style={tb.addCircle}>
@@ -78,13 +82,22 @@ function AddTabButton({ onPress }) {
 }
 
 export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
+  const { T, isDark } = useTheme();
   const [ready, setReady] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({ resetOnBackground: true });
   const notificationSub = useRef(null);
 
   const [fontsLoaded] = useFonts({
-    CormorantGaramond_700Bold, CormorantGaramond_400Regular,
+    PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_900Black,
     Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold,
     IBMPlexMono_400Regular, IBMPlexMono_600SemiBold,
   });
@@ -121,6 +134,25 @@ export default function App() {
     return () => notificationSub.current?.remove();
   }, []);
 
+  const app = useMemo(() => makeAppStyles(T), [T]);
+  const navTheme = useMemo(() => ({
+    dark: isDark,
+    colors: {
+      primary: T.indigo,
+      background: T.paper,
+      card: T.card,
+      text: T.ink,
+      border: T.seam,
+      notification: T.rust,
+    },
+    fonts: {
+      regular: { fontFamily: FONTS.sans, fontWeight: '400' },
+      medium: { fontFamily: FONTS.sansMedium, fontWeight: '500' },
+      bold: { fontFamily: FONTS.sansSemi, fontWeight: '600' },
+      heavy: { fontFamily: FONTS.sansBold, fontWeight: '700' },
+    },
+  }), [T, isDark]);
+
   if (!ready || !fontsLoaded) {
     return (
       <View style={app.boot}>
@@ -132,7 +164,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <NavigationContainer ref={navRef} theme={navTheme}>
         {!hasProfile ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -148,6 +180,7 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="AddItem" component={AddItemScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="ItemDetail" component={ItemDetailScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Packing" component={PackingScreen} />
           </Stack.Navigator>
         )}
       </NavigationContainer>
@@ -158,6 +191,8 @@ export default function App() {
 // The Profile tab needs onReset (erase-all-data); pass it through without
 // threading extra props into every other tab.
 function TabsWithReset({ onReset }) {
+  const { T } = useTheme();
+  const tb = useMemo(() => makeTbStyles(T), [T]);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -165,7 +200,13 @@ function TabsWithReset({ onReset }) {
         tabBarActiveTintColor: T.indigo,
         tabBarInactiveTintColor: T.muted,
         tabBarStyle: tb.bar,
-        tabBarLabelStyle: tb.label,
+        // Figma sets the active tab in Geist 600 and the rest in Geist 500,
+        // so the label is rendered directly rather than via tabBarLabelStyle.
+        tabBarLabel: ({ focused, color }) => (
+          <Text style={[tb.label, { color, fontFamily: focused ? FONTS.sansSemi : FONTS.sansMedium }]}>
+            {route.name}
+          </Text>
+        ),
         tabBarIcon: ({ color }) => <TabIcon name={route.name} color={color} />,
       })}
     >
@@ -185,35 +226,17 @@ function TabsWithReset({ onReset }) {
   );
 }
 
-const navTheme = {
-  dark: false,
-  colors: {
-    primary: T.indigo,
-    background: T.paper,
-    card: T.card,
-    text: T.ink,
-    border: T.seam,
-    notification: T.rust,
-  },
-  fonts: {
-    regular: { fontFamily: FONTS.sans, fontWeight: '400' },
-    medium: { fontFamily: FONTS.sansMedium, fontWeight: '500' },
-    bold: { fontFamily: FONTS.sansSemi, fontWeight: '600' },
-    heavy: { fontFamily: FONTS.sansBold, fontWeight: '700' },
-  },
-};
-
-const app = StyleSheet.create({
+const makeAppStyles = (T) => StyleSheet.create({
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: T.paper, gap: 12 },
   bootText: { fontFamily: FONTS.sans, fontSize: 13, color: T.muted },
 });
 
-const tb = StyleSheet.create({
+const makeTbStyles = (T) => StyleSheet.create({
   bar: { backgroundColor: T.card, borderTopColor: T.seam, height: 78, paddingTop: 8 },
-  label: { fontFamily: FONTS.sansMedium, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
+  label: { fontSize: 10, lineHeight: 13, letterSpacing: 0 },
   addWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', top: -2 },
   addCircle: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: T.indigo,
+    width: 32, height: 32, borderRadius: 16, backgroundColor: T.indigo,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: T.indigo, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },

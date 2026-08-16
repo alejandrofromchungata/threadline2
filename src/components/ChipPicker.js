@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Chip, Row, Micro } from './ui';
-import { T } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 /**
  * Long option lists get unwieldy on a phone, so this filters as you type
@@ -15,6 +15,8 @@ export default function ChipPicker({
   onAddCustom,
   placeholder = 'Search or add your own',
 }) {
+  const { T } = useTheme();
+  const p = useMemo(() => makeStyles(T), [T]);
   const [q, setQ] = useState('');
 
   const all = useMemo(() => [...options, ...custom], [options, custom]);
@@ -61,7 +63,7 @@ export default function ChipPicker({
 
       <Row style={{ marginTop: 12 }}>
         {shown.map((o) => (
-          <Chip key={o} label={o} active={selected.includes(o)} onPress={() => onToggle(o)} />
+          <Chip key={o} label={o} picker active={selected.includes(o)} onPress={() => onToggle(o)} />
         ))}
       </Row>
 
@@ -74,7 +76,7 @@ export default function ChipPicker({
   );
 }
 
-const p = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   search: {
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 2,
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: T.ink,

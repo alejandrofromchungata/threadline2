@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TextInput, Alert } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TextInput, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -13,21 +13,61 @@ import { scheduleLaundryReminder } from '../services/notifications';
 import {
   listItems, getSetting, markWorn, addWearLog, addFeedback, recentFeedback, listWearLog, saveOutfit,
 } from '../db';
-import { T, FONTS } from '../theme';
+import { FONTS, getStatus, formalityDots } from '../theme';
+import { useTheme } from '../ThemeContext';
 
-const QUICK = ['work', 'date night', 'casual weekend', 'gym', 'dinner with family', 'travel day'];
+const QUICK = ['Work', 'Date Night', 'Casual', 'Wedding', 'Gym', 'Brunch'];
 
-const XIcon = () => <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 6l12 12M18 6L6 18" stroke={T.ink} strokeWidth={2} strokeLinecap="round" /></Svg>;
-const ShuffleIcon = () => (
-  <Svg viewBox="0 0 24 24" width={18} height={18}>
-    <Path d="M4 6h3l9 12h4M4 18h3l3-4M16 6h4M17 4l3 2-3 2M17 20l3-2-3-2" stroke={T.indigo} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-  </Svg>
-);
-const HeartIcon = () => <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M12 21s-7-4.4-9.5-8.8C.7 8.6 2.6 5 6.2 5c2 0 3.3 1 4.8 3 1.5-2 2.8-3 4.8-3 3.6 0 5.5 3.6 3.7 7.2C19 16.6 12 21 12 21Z" stroke={T.rust} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
-const BookmarkIcon = () => <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 4h12v16l-6-4-6 4V4Z" stroke={T.indigo} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
-const BackArrow = () => <Svg viewBox="0 0 24 24" width={16} height={16}><Path d="M15 5l-7 7 7 7" stroke={T.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" /></Svg>;
+const SearchIcon = () => {
+  const { T } = useTheme();
+  return (
+    <Svg viewBox="0 0 24 24" width={18} height={18}>
+      <Path d="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z" stroke={T.muted} strokeWidth={2} fill="none" />
+      <Path d="M21 21l-4.3-4.3" stroke={T.muted} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+};
+const CloudRainIcon = () => {
+  const { T } = useTheme();
+  return (
+    <Svg viewBox="0 0 24 24" width={20} height={19}>
+      <Path
+        d="M6 14a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6 1.7A3.5 3.5 0 0 1 16.5 14H6Z"
+        stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none"
+      />
+      <Path d="M8 18v1M12 18v2M16 18v1" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+};
+
+const XIcon = () => {
+  const { T } = useTheme();
+  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 6l12 12M18 6L6 18" stroke={T.ink} strokeWidth={2} strokeLinecap="round" /></Svg>;
+};
+const ShuffleIcon = () => {
+  const { T } = useTheme();
+  return (
+    <Svg viewBox="0 0 24 24" width={18} height={18}>
+      <Path d="M4 6h3l9 12h4M4 18h3l3-4M16 6h4M17 4l3 2-3 2M17 20l3-2-3-2" stroke={T.indigo} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+};
+const HeartIcon = () => {
+  const { T } = useTheme();
+  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M12 21s-7-4.4-9.5-8.8C.7 8.6 2.6 5 6.2 5c2 0 3.3 1 4.8 3 1.5-2 2.8-3 4.8-3 3.6 0 5.5 3.6 3.7 7.2C19 16.6 12 21 12 21Z" stroke={T.rust} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
+};
+const BookmarkIcon = () => {
+  const { T } = useTheme();
+  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 4h12v16l-6-4-6 4V4Z" stroke={T.indigo} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
+};
+const BackArrow = () => {
+  const { T } = useTheme();
+  return <Svg viewBox="0 0 24 24" width={16} height={16}><Path d="M15 5l-7 7 7 7" stroke={T.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" /></Svg>;
+};
 
 export default function OutfitScreen() {
+  const { T } = useTheme();
+  const g = useMemo(() => makeStyles(T), [T]);
   const [items, setItems] = useState([]);
   const [profile, setProfile] = useState({ styles: [], contexts: [] });
   const [weather, setWeather] = useState(null);
@@ -92,6 +132,7 @@ export default function OutfitScreen() {
       occasion: occasion.trim() || 'ordinary day',
       verdict,
       itemNames: outfit.itemIds.map((id) => items.find((i) => i.id === id)?.name).filter(Boolean),
+      itemIds: outfit.itemIds,
     });
     if (verdict === 'down') generate(true);
   };
@@ -120,12 +161,12 @@ export default function OutfitScreen() {
     return (
       <SafeAreaView style={g.safe} edges={['top']}>
         <View style={g.navBar}>
-          <View style={g.backLink} onTouchEnd={() => setOutfit(null)}>
+          <Pressable style={g.backLink} onPress={() => setOutfit(null)} hitSlop={8} accessibilityRole="button">
             <BackArrow />
             <Text style={g.backText}>Back</Text>
-          </View>
+          </Pressable>
           <Heading size={18}>Your Cut Sheet</Heading>
-          <Eyebrow>{`OUTFIT`}</Eyebrow>
+          <Eyebrow strong>OUTFIT</Eyebrow>
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -134,19 +175,34 @@ export default function OutfitScreen() {
           </CareCard>
 
           <View style={g.grid}>
-            {chosen.map((i) => (
-              <View key={i.id} style={g.piece}>
-                {i.imageUri ? (
-                  <Image source={{ uri: i.imageUri }} style={{ width: '100%', height: 110 }} contentFit="contain" />
-                ) : (
-                  <View style={g.pieceArt}><Garment category={i.category} color={i.color} size={72} /></View>
-                )}
-                <View style={g.pieceLabel}>
-                  <Text style={g.pieceCat}>{i.category}</Text>
-                  <Text style={g.pieceName} numberOfLines={2}>{i.name}</Text>
+            {chosen.map((i) => {
+              const status = getStatus(T)[i.status] || getStatus(T).clean;
+              const itemCpw = i.price ? (i.price / Math.max(i.wears, 1)).toFixed(0) : null;
+              return (
+                <View key={i.id} style={g.piece}>
+                  <View style={g.pieceArt}>
+                    {i.imageUri ? (
+                      <Image source={{ uri: i.imageUri }} style={{ width: '100%', height: 130 }} contentFit="contain" />
+                    ) : (
+                      <Garment category={i.category} color={i.color} size={72} />
+                    )}
+                    <View style={g.pieceStatusBadge}>
+                      <View style={[g.pieceStatusDot, { backgroundColor: status.dot }]} />
+                      <Text style={g.pieceStatusText}>{status.label.toLowerCase()}</Text>
+                    </View>
+                  </View>
+                  <View style={g.pieceLabel}>
+                    <Text style={g.pieceCat}>{i.category}</Text>
+                    <Text style={g.pieceName} numberOfLines={2}>{i.name}</Text>
+                  </View>
+                  <View style={g.pieceCareStrip}>
+                    <Text style={g.pieceCareText} numberOfLines={1}>{i.material || '—'}</Text>
+                    <Text style={g.pieceCareDots}>{formalityDots(i.formality)} CPW</Text>
+                    <Text style={g.pieceCarePrice}>{itemCpw ? `${itemCpw}` : '—'}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
 
           <CareCard eyebrow="THE TAILOR'S STYLING NOTE" style={{ marginTop: 20 }}>
@@ -170,7 +226,7 @@ export default function OutfitScreen() {
               <BookmarkIcon />
             </IconButton>
           </View>
-          <Button title="Wearing This Today · Log It" busy={busy} onPress={wearIt} />
+          <Button title="Wearing This Today • Log It" busy={busy} onPress={wearIt} />
         </View>
       </SafeAreaView>
     );
@@ -189,13 +245,16 @@ export default function OutfitScreen() {
         <Eyebrow tone="indigo">01 / DEFINE DESTINATION</Eyebrow>
         <Heading size={30} style={{ marginTop: 4, marginBottom: 16 }}>Where are you headed?</Heading>
 
-        <TextInput
-          value={occasion}
-          onChangeText={setOccasion}
-          placeholder="E.g., Gallery opening in Chelsea"
-          placeholderTextColor={T.muted}
-          style={g.field}
-        />
+        <View style={g.inputBox}>
+          <SearchIcon />
+          <TextInput
+            value={occasion}
+            onChangeText={setOccasion}
+            placeholder="E.g., Gallery opening in Chelsea"
+            placeholderTextColor={T.muted}
+            style={g.inputText}
+          />
+        </View>
         <Row style={{ marginTop: 12 }}>
           {QUICK.map((q) => (
             <Chip key={q} small label={q} active={occasion === q} onPress={() => setOccasion(q)} />
@@ -208,9 +267,15 @@ export default function OutfitScreen() {
               <>
                 <Heading size={22}>{weather.sky}, {weather.temp}{weather.unit}</Heading>
                 <View style={g.hr} />
-                <Text style={g.wxLine}>
-                  {weather.rainChance >= 15 ? `${weather.rainChance}% RAIN CHANCE` : `HIGH ${weather.high} / LOW ${weather.low}`}
-                </Text>
+                <View style={g.wxRow}>
+                  <View style={g.wxCondition}>
+                    <CloudRainIcon />
+                    <Text style={g.wxConditionText}>{describeWeather(weather)}</Text>
+                  </View>
+                  <Text style={g.wxLine}>
+                    {weather.rainChance >= 15 ? `${weather.rainChance}% RAIN CHANCE` : `HIGH ${weather.high} / LOW ${weather.low}`}
+                  </Text>
+                </View>
                 <View style={g.hr} />
                 <Text style={g.faint}>FORECAST FROM YOUR LOCATION</Text>
               </>
@@ -223,14 +288,29 @@ export default function OutfitScreen() {
         {!!events.length && (
           <CareCard eyebrow="03 / DETECTED SCHEDULE" style={{ marginTop: 16 }}>
             <View style={g.hr} />
-            {events.slice(0, 4).map((e) => (
-              <Chip
-                key={e.id}
-                label={e.title.length > 28 ? `${e.title.slice(0, 26)}…` : e.title}
-                active={occasion === occasionFromEvent(e).occasion}
-                onPress={() => setOccasion(occasionFromEvent(e).occasion)}
-              />
-            ))}
+            <Pressable onPress={() => setOccasion(occasionFromEvent(events[0]).occasion)}>
+              <Text style={g.eventTitle}>{events[0].title}</Text>
+              <View style={g.timeLocationRow}>
+                <Text style={g.faint}>
+                  {events[0].start.toDateString() === new Date().toDateString() ? 'TODAY' : events[0].start.toDateString().toUpperCase()}
+                  {' • '}{events[0].start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </Text>
+                {!!events[0].location && <Text style={g.wxLine}>{events[0].location.toUpperCase()}</Text>}
+              </View>
+            </Pressable>
+            {events.length > 1 && (
+              <Row style={{ marginTop: 10 }}>
+                {events.slice(0, 4).map((e) => (
+                  <Chip
+                    key={e.id}
+                    small
+                    label={e.title.length > 28 ? `${e.title.slice(0, 26)}…` : e.title}
+                    active={occasion === occasionFromEvent(e).occasion}
+                    onPress={() => setOccasion(occasionFromEvent(e).occasion)}
+                  />
+                ))}
+              </Row>
+            )}
           </CareCard>
         )}
 
@@ -245,13 +325,13 @@ export default function OutfitScreen() {
       </ScrollView>
 
       <View style={g.footer}>
-        <Button title="Style Me · Begin Stitching" busy={busy} onPress={() => generate(false)} />
+        <Button title="Style Me • Begin Stitching" busy={busy} onPress={() => generate(false)} />
       </View>
     </SafeAreaView>
   );
 }
 
-const g = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -263,19 +343,48 @@ const g = StyleSheet.create({
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
     paddingHorizontal: 14, paddingVertical: 14, fontFamily: FONTS.sans, fontSize: 15, color: T.ink,
   },
+  inputBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 14,
+  },
+  inputText: { flex: 1, fontFamily: FONTS.sans, fontSize: 15, color: T.ink, padding: 0 },
   hr: { height: 1, backgroundColor: T.seam },
-  wxLine: { fontFamily: FONTS.monoSemi, fontSize: 13, color: T.indigo, letterSpacing: 0.4 },
-  faint: { fontFamily: FONTS.mono, fontSize: 10, color: T.muted, letterSpacing: 0.4 },
+  wxLine: { fontFamily: FONTS.monoSemi, fontSize: 13, lineHeight: 17, color: T.indigo, letterSpacing: 0 },
+  wxRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wxCondition: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wxConditionText: { fontFamily: FONTS.sansSemi, fontSize: 15, color: T.ink },
+  eventTitle: { fontFamily: FONTS.display, fontSize: 20, lineHeight: 27, color: T.ink },
+  timeLocationRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  faint: { fontFamily: FONTS.mono, fontSize: 10, lineHeight: 13, color: T.muted, letterSpacing: 0 },
   footer: { padding: 20, paddingTop: 12, gap: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 20 },
   piece: {
     width: '47%', borderWidth: 1, borderColor: T.seam, borderRadius: 8,
     backgroundColor: T.card, overflow: 'hidden',
   },
-  pieceArt: { height: 110, alignItems: 'center', justifyContent: 'center', backgroundColor: T.paper },
+  pieceArt: {
+    height: 130, alignItems: 'center', justifyContent: 'center', backgroundColor: T.photoBg,
+    position: 'relative',
+  },
+  pieceStatusBadge: {
+    position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: T.card, borderRadius: 100, paddingHorizontal: 4, paddingVertical: 4,
+    borderWidth: 1, borderColor: T.seam,
+  },
+  pieceStatusDot: { width: 8, height: 8, borderRadius: 4 },
+  pieceStatusText: { fontFamily: FONTS.monoSemi, fontSize: 9, color: T.ink },
   pieceLabel: { padding: 10, borderTopWidth: 1, borderColor: T.seam },
-  pieceCat: { fontFamily: FONTS.mono, fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: T.muted },
-  pieceName: { fontFamily: FONTS.display, fontSize: 15, color: T.ink, marginTop: 2 },
+  pieceCat: { fontFamily: FONTS.mono, fontSize: 9, lineHeight: 12, letterSpacing: 0, textTransform: 'uppercase', color: T.muted },
+  pieceName: { fontFamily: FONTS.display, fontSize: 16, color: T.ink, marginTop: 2 },
+  pieceCareStrip: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderTopWidth: 1, borderColor: T.seam, backgroundColor: T.careStrip,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  pieceCareText: { fontFamily: FONTS.mono, fontSize: 9, color: T.muted, flexShrink: 1 },
+  pieceCareDots: { fontFamily: FONTS.monoSemi, fontSize: 9, color: T.indigo },
+  pieceCarePrice: { fontFamily: FONTS.mono, fontSize: 9, color: T.ink },
   why: { fontFamily: FONTS.displayRegular, fontSize: 16, lineHeight: 24, color: T.ink, fontStyle: 'italic' },
   gap: { fontFamily: FONTS.sansMedium, fontSize: 14, color: T.ink, lineHeight: 20 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 },

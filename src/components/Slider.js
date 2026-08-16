@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { T } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 /**
  * Stepped 1–5 control. Deliberately not a drag slider: discrete taps are
  * more accurate on a phone and need no extra native dependency.
  */
 export default function Slider({ min = 1, max = 5, value, onChange, labels }) {
+  const { T } = useTheme();
+  const sl = useMemo(() => makeStyles(T), [T]);
   const steps = [];
   for (let v = min; v <= max; v++) steps.push(v);
   return (
@@ -29,7 +31,7 @@ export default function Slider({ min = 1, max = 5, value, onChange, labels }) {
   );
 }
 
-const sl = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   row: { flexDirection: 'row', gap: 6, marginBottom: 16 },
   step: {
     flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 2,

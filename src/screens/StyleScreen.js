@@ -1,21 +1,62 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, Linking } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Button, Stitch, Hint, Micro } from '../components/ui';
+import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
+import Garment from '../components/Garment';
+import { Button, Chip, Row, Stitch, Hint, Micro } from '../components/ui';
 import ChipPicker from '../components/ChipPicker';
-import { getSetting, setSetting, wipeAll, recentFeedback } from '../db';
+import { getSetting, setSetting, wipeAll, recentFeedback, listItems, listWearLog } from '../db';
 import { API_BASE } from '../api';
-import { T, STYLES, CONTEXTS } from '../theme';
+import { STYLES, CONTEXTS, FONTS } from '../theme';
+import { useTheme } from '../ThemeContext';
+
+const APPEARANCE_OPTIONS = [
+  ['system', 'Match phone'],
+  ['light', 'Light'],
+  ['dark', 'Dark'],
+];
+
+function NeedleIcon({ color }) {
+  return (
+    <Svg viewBox="0 0 24 24" width={34} height={34}>
+      <Path d="M6 18l9-13" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M15 5l2 1-1 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ReactionBadgeIcon({ up, color }) {
+  return up ? (
+    <Svg viewBox="0 0 24 24" width={12} height={12}>
+      <Path d="M12 21s-7-4.4-9.5-8.8C.7 8.6 2.6 5 6.2 5c2 0 3.3 1 4.8 3 1.5-2 2.8-3 4.8-3 3.6 0 5.5 3.6 3.7 7.2C19 16.6 12 21 12 21Z" stroke={color} strokeWidth={2} fill="none" strokeLinejoin="round" />
+    </Svg>
+  ) : (
+    <Svg viewBox="0 0 24 24" width={10} height={10}>
+      <Path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
 
 export default function StyleScreen({ onReset }) {
+  const { T, mode, setMode } = useTheme();
+  const st = useMemo(() => makeStyles(T), [T]);
   const [profile, setProfile] = useState({ styles: [], contexts: [], customStyles: [], customContexts: [] });
   const [learned, setLearned] = useState([]);
+  const [items, setItems] = useState([]);
+  const [wornCount, setWornCount] = useState(0);
+  const [editingStyles, setEditingStyles] = useState(false);
+  const [editingContexts, setEditingContexts] = useState(false);
 
   const load = useCallback(async () => {
-    const saved = await getSetting('profile', {});
+    const [saved, feedback, closet, log] = await Promise.all([
+      getSetting('profile', {}), recentFeedback(6), listItems(), listWearLog(500),
+    ]);
     setProfile({ styles: [], contexts: [], customStyles: [], customContexts: [], ...saved });
-    setLearned(await recentFeedback(6));
+    setLearned(feedback);
+    setItems(closet);
+    setWornCount(log.length);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -55,78 +96,178 @@ export default function StyleScreen({ onReset }) {
     );
   };
 
+  const memberSince = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : null;
+  const favoriteStyle = profile.styles?.[0]
+    ? profile.styles[0].replace(/^\w/, (c) => c.toUpperCase())
+    : '—';
+
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        <Text style={st.title}>Style</Text>
-        <Hint style={{ marginTop: 6 }}>
-          These weight every suggestion. Your thumbs up and down adjust them further.
-        </Hint>
+        {/* Figma's nav-bar also carries a Back link, but this screen is a tab
+            root — there is nothing to go back to, so only the title and the
+            PREFERENCES marker carry over. */}
+        <View style={st.navBar}>
+          <Text style={st.title}>Style Profile</Text>
+          <Micro strong>Preferences</Micro>
+        </View>
 
-        <Stitch label="STYLES" />
-        <ChipPicker
-          options={STYLES}
-          custom={profile.customStyles || []}
-          selected={profile.styles || []}
-          onToggle={(v) => toggle('styles', v)}
-          onAddCustom={(v) => addCustom('styles', 'customStyles', v)}
-          placeholder="Search styles, or add your own"
-        />
+        <View style={st.profileHeader}>
+          <View style={st.avatar}><NeedleIcon color={T.indigo} /></View>
+          <Hint style={{ textAlign: 'center', marginTop: 4 }}>
+            These preferences weight every suggestion. Your thumbs up and down adjust them further.
+          </Hint>
+          {!!memberSince && <Micro style={{ marginTop: 2 }}>{`Member since ${memberSince}`}</Micro>}
+        </View>
 
-        <Stitch label="WHERE YOU SHOW UP" />
-        <ChipPicker
-          options={CONTEXTS}
-          custom={profile.customContexts || []}
-          selected={profile.contexts || []}
-          onToggle={(v) => toggle('contexts', v)}
-          onAddCustom={(v) => addCustom('contexts', 'customContexts', v)}
-          placeholder="Search settings, or add your own"
-        />
+        <View style={st.statsRow}>
+          <View style={st.statCard}>
+            <Micro>Total pieces</Micro>
+            <Text style={st.statValue}>{items.length}</Text>
+          </View>
+          <View style={st.statCard}>
+            <Micro>Outfits worn</Micro>
+            <Text style={st.statValue}>{wornCount}</Text>
+          </View>
+          <View style={st.statCard}>
+            <Micro>Favorite style</Micro>
+            <Text style={st.statValue} numberOfLines={1}>{favoriteStyle}</Text>
+          </View>
+        </View>
+
+        <View style={st.sectionHead}>
+          <Micro>Chosen aesthetics</Micro>
+          <Pressable onPress={() => setEditingStyles((v) => !v)} hitSlop={8}>
+            <Text style={st.editLink}>{editingStyles ? 'Done' : 'Edit'}</Text>
+          </Pressable>
+        </View>
+        {editingStyles ? (
+          <ChipPicker
+            options={STYLES}
+            custom={profile.customStyles || []}
+            selected={profile.styles || []}
+            onToggle={(v) => toggle('styles', v)}
+            onAddCustom={(v) => addCustom('styles', 'customStyles', v)}
+            placeholder="Search styles, or add your own"
+          />
+        ) : (
+          <Row>
+            {(profile.styles || []).length
+              ? profile.styles.map((s) => <Chip key={s} label={s} active onPress={() => setEditingStyles(true)} />)
+              : <Hint>None chosen yet — tap Edit to add some.</Hint>}
+          </Row>
+        )}
+
+        <View style={[st.sectionHead, { marginTop: 20 }]}>
+          <Micro>Daily arenas</Micro>
+          <Pressable onPress={() => setEditingContexts((v) => !v)} hitSlop={8}>
+            <Text style={st.editLink}>{editingContexts ? 'Done' : 'Edit'}</Text>
+          </Pressable>
+        </View>
+        {editingContexts ? (
+          <ChipPicker
+            options={CONTEXTS}
+            custom={profile.customContexts || []}
+            selected={profile.contexts || []}
+            onToggle={(v) => toggle('contexts', v)}
+            onAddCustom={(v) => addCustom('contexts', 'customContexts', v)}
+            placeholder="Search settings, or add your own"
+          />
+        ) : (
+          <Row>
+            {(profile.contexts || []).length
+              ? profile.contexts.map((c) => <Chip key={c} label={c} onPress={() => setEditingContexts(true)} />)
+              : <Hint>None chosen yet — tap Edit to add some.</Hint>}
+          </Row>
+        )}
 
         {!!learned.length && (
           <>
             <Stitch label="RECENT REACTIONS" />
-            {learned.map((f) => (
-              <View key={f.id} style={st.fbRow}>
-                <Text style={[st.fbMark, { color: f.verdict === 'up' ? T.sage : T.rust }]}>
-                  {f.verdict === 'up' ? '+' : '–'}
-                </Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={st.fbOcc}>{f.occasion}</Text>
-                  <Text style={st.fbItems} numberOfLines={1}>{f.itemNames.join(' + ')}</Text>
-                </View>
-              </View>
-            ))}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+              {learned.map((f) => {
+                const firstItem = (f.itemIds || []).map((id) => items.find((i) => i.id === id)).find(Boolean);
+                const up = f.verdict === 'up';
+                return (
+                  <View key={f.id} style={st.reactionCard}>
+                    {firstItem?.imageUri ? (
+                      <Image source={{ uri: firstItem.imageUri }} style={{ width: 100, height: 120 }} contentFit="cover" />
+                    ) : (
+                      <View style={st.reactionFallback}>
+                        <Garment category={firstItem?.category || 'tops'} color={firstItem?.color} size={56} />
+                      </View>
+                    )}
+                    <View style={[st.reactionBadge, { backgroundColor: up ? T.sage : T.rust }]}>
+                      <ReactionBadgeIcon up={up} color="#fff" />
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
           </>
         )}
 
-        <Stitch label="DATA" />
-        <Micro>Where things live</Micro>
-        <Hint>
-          Your closet, photos and history stay in this app's storage on your phone. Photos are sent once
-          to {API_BASE ? new URL(API_BASE).host : 'the Threadline service'} for background removal and tagging,
-          and are not retained there.
-        </Hint>
-        <Button
-          title="Privacy policy"
-          variant="ghost"
-          style={{ marginTop: 12 }}
-          onPress={() => Linking.openURL('https://yourdomain.example/threadline/privacy')}
-        />
-        <Button title="Erase all my data" variant="danger" style={{ marginTop: 10 }} onPress={reset} />
+        <Stitch label="APPEARANCE" />
+        <Row>
+          {APPEARANCE_OPTIONS.map(([k, label]) => (
+            <Chip key={k} label={label} active={mode === k} onPress={() => setMode(k)} />
+          ))}
+        </Row>
+
+        <Stitch label="YOUR DATA & PRIVACY" />
+        <View style={st.privacyCard}>
+          <Micro>Wardrobe data & sources</Micro>
+          <View style={st.hr} />
+          <Text style={st.privacyText}>
+            Your closet, photos and history stay in this app's storage on your phone. Photos are sent once
+            to {API_BASE ? new URL(API_BASE).host : 'the Threadline service'} for background removal and tagging,
+            and are not sold, retained, or used to train anything.
+          </Text>
+          <View style={st.hr} />
+          <Pressable onPress={() => Linking.openURL('https://yourdomain.example/threadline/privacy')}>
+            <Micro style={{ color: T.indigo }}>Plain text privacy policy</Micro>
+          </Pressable>
+        </View>
+        <Button title="Erase All Local Wardrobe Data" variant="danger" style={{ marginTop: 12 }} onPress={reset} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const st = StyleSheet.create({
+const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.9, color: T.ink },
-  fbRow: {
-    flexDirection: 'row', gap: 12, paddingVertical: 10,
-    borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed',
+  navBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  fbMark: { fontSize: 18, fontWeight: '700', width: 14 },
-  fbOcc: { fontSize: 13, color: T.ink, fontWeight: '500' },
-  fbItems: { fontSize: 12, color: T.muted, marginTop: 2 },
+  title: { fontFamily: FONTS.display, fontSize: 18, lineHeight: 24, color: T.ink },
+  profileHeader: { alignItems: 'center', marginBottom: 16 },
+  avatar: {
+    width: 96, height: 96, borderRadius: 48, backgroundColor: T.card, borderWidth: 1, borderColor: T.seam,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  statCard: {
+    flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    padding: 12, gap: 4,
+  },
+  statValue: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  editLink: { fontFamily: FONTS.sans, fontSize: 13, color: T.indigo },
+  reactionCard: {
+    width: 100, height: 120, borderRadius: 8, overflow: 'hidden',
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam,
+  },
+  reactionFallback: { width: 100, height: 120, alignItems: 'center', justifyContent: 'center' },
+  reactionBadge: {
+    position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hr: { height: 1, backgroundColor: T.seam, marginVertical: 12 },
+  privacyCard: {
+    borderWidth: 1, borderColor: T.seam, backgroundColor: T.card, borderRadius: 8, padding: 16,
+  },
+  privacyText: { fontFamily: FONTS.displayRegular, fontSize: 15, lineHeight: 21, color: T.ink },
 });

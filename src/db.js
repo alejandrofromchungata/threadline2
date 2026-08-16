@@ -57,6 +57,9 @@ export function getDb() {
         CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
         CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
       `);
+      // Added after the original feedback table shipped — lets the profile
+      // screen show the actual reacted-to photo instead of just its name.
+      try { await db.execAsync('ALTER TABLE feedback ADD COLUMN itemIds TEXT'); } catch { /* already there */ }
       return db;
     })();
   }
@@ -77,6 +80,17 @@ export async function listItems() {
   const db = await getDb();
   const rows = await db.getAllAsync('SELECT * FROM items ORDER BY createdAt DESC');
   return rows.map(parse);
+}
+
+/** Catalogue number for the detail screen ("NO. 0042") — 1 for the first
+ * piece ever added, stable regardless of later inserts or deletes. */
+export async function getItemNumber(id) {
+  const db = await getDb();
+  const row = await db.getFirstAsync(
+    'SELECT COUNT(*) as n FROM items WHERE createdAt <= (SELECT createdAt FROM items WHERE id = ?)',
+    id
+  );
+  return row ? row.n : 1;
 }
 
 export async function getItem(id) {
@@ -187,15 +201,19 @@ export async function listWearLog(limit = 60) {
 export async function addFeedback(f) {
   const db = await getDb();
   await db.runAsync(
-    'INSERT INTO feedback (ts, occasion, verdict, itemNames) VALUES (?,?,?,?)',
-    new Date().toISOString(), f.occasion, f.verdict, JSON.stringify(f.itemNames)
+    'INSERT INTO feedback (ts, occasion, verdict, itemNames, itemIds) VALUES (?,?,?,?,?)',
+    new Date().toISOString(), f.occasion, f.verdict, JSON.stringify(f.itemNames), JSON.stringify(f.itemIds || [])
   );
 }
 
 export async function recentFeedback(limit = 8) {
   const db = await getDb();
   const rows = await db.getAllAsync('SELECT * FROM feedback ORDER BY id DESC LIMIT ?', limit);
-  return rows.map((r) => ({ ...r, itemNames: JSON.parse(r.itemNames || '[]') }));
+  return rows.map((r) => ({
+    ...r,
+    itemNames: JSON.parse(r.itemNames || '[]'),
+    itemIds: JSON.parse(r.itemIds || '[]'),
+  }));
 }
 
 /* ── saved outfits ─────────────────────────────────────── */
