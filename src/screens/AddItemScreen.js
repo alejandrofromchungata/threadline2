@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
-import Svg, { Path } from 'react-native-svg';
+import { ArrowLeft, Link2 } from 'lucide-react-native';
 import Slider from '../components/Slider';
 import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
 import Garment from '../components/Garment';
@@ -75,9 +75,7 @@ export default function AddItemScreen({ navigation, route }) {
           style={a.backLink}
           hitSlop={8}
         >
-          <Svg viewBox="0 0 24 24" width={20} height={20}>
-            <Path d="M15 5l-7 7 7 7" stroke={T.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </Svg>
+          <ArrowLeft size={20} color={T.ink} strokeWidth={2} />
           <Text style={a.backText}>{backLabel}</Text>
         </Pressable>
         <Text style={a.title}>{headerTitle}</Text>
@@ -301,12 +299,7 @@ function LinkFlow({ itemId, initialUrl, onReady }) {
     <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
       <Micro>01 / Enter product URL</Micro>
       <View style={[a.inputBox, { marginTop: 8 }]}>
-        <Svg viewBox="0 0 24 24" width={18} height={18}>
-          <Path
-            d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.2-1.2"
-            stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none"
-          />
-        </Svg>
+        <Link2 size={18} color={T.indigo} strokeWidth={2} />
         <TextInput
           value={url}
           onChangeText={setUrl}

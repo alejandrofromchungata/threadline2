@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import { CircleX, SlidersHorizontal, Search } from 'lucide-react-native';
 import ItemCard from '../components/ItemCard';
 import { Chip, Button, Hint, Eyebrow, Heading } from '../components/ui';
 import Garment from '../components/Garment';
@@ -19,34 +19,21 @@ const SORTS = [
   ['name', 'a–z'],
 ];
 
+// Figma draws these with Lucide: circle-x for the wordmark, sliders-horizontal
+// for sort, search for the filter field.
 function NeedleMark() {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={22} height={22}>
-      <Path d="M6 18l9-13" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" />
-      <Path d="M15 5l2 1-1 2" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={7} cy={17} r={2} stroke={T.indigo} strokeWidth={1.4} fill="none" />
-    </Svg>
-  );
+  return <CircleX size={24} color={T.indigo} strokeWidth={2} />;
 }
 
 function FilterIcon() {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={19} height={19}>
-      <Path d="M4 6h16M7 12h10M10 18h4" stroke={T.ink} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  );
+  return <SlidersHorizontal size={20} color={T.ink} strokeWidth={2} />;
 }
 
 function SearchIcon() {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={19} height={19}>
-      <Circle cx={11} cy={11} r={7} stroke={T.ink} strokeWidth={1.8} fill="none" />
-      <Path d="M21 21l-4.3-4.3" stroke={T.ink} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  );
+  return <Search size={20} color={T.ink} strokeWidth={2} />;
 }
 
 export default function ClosetScreen({ navigation }) {
@@ -133,11 +120,10 @@ export default function ClosetScreen({ navigation }) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={cs.chipRow}
       >
-        <Chip small label="All" active={cat === 'all'} onPress={() => setCat('all')} />
+        <Chip label="All" active={cat === 'all'} onPress={() => setCat('all')} />
         {CATEGORIES.map((c) => (
           <Chip
             key={c}
-            small
             label={c[0].toUpperCase() + c.slice(1)}
             active={cat === c}
             onPress={() => setCat(c)}
@@ -194,7 +180,7 @@ const makeStyles = (T) => StyleSheet.create({
     paddingHorizontal: 24, paddingVertical: 12,
   },
   brandLogo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wordmark: { fontFamily: FONTS.displayBlack, fontSize: 22, color: T.indigo },
+  wordmark: { fontFamily: FONTS.displayBlack, fontSize: 22, lineHeight: 29, color: T.indigo },
   actionIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   search: {
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,

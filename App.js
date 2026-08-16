@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { useShareIntent } from 'expo-share-intent';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import { CircleX, Sparkles, CalendarCheck, User, Plus } from 'lucide-react-native';
 
 import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_900Black }
   from '@expo-google-fonts/playfair-display';
@@ -35,36 +35,13 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 export const navRef = createNavigationContainerRef();
 
-/** Icon set matching the Figma tab bar: layers, sparkles, calendar-check, user. */
+// Figma names these Lucide icons directly: circle-x, sparkles, calendar-check
+// and user, each in a 24pt box at stroke width 2.
+const TAB_ICONS = { Closet: CircleX, Outfit: Sparkles, Log: CalendarCheck, Profile: User };
+
 function TabIcon({ name, color }) {
-  const p = { stroke: color, strokeWidth: 2, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
-  const shapes = {
-    Closet: (
-      <>
-        <Path d="M12 3 3 8l9 5 9-5-9-5Z" {...p} />
-        <Path d="M3 13l9 5 9-5" {...p} />
-      </>
-    ),
-    Outfit: (
-      <Path
-        d="M12 3l1.5 3.5L17 8l-3.5 1.5L12 13l-1.5-3.5L7 8l3.5-1.5L12 3ZM19 14l.8 1.8L21.5 16.5l-1.7.7L19 19l-.8-1.8-1.7-.7 1.7-.7L19 14ZM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15Z"
-        {...p}
-      />
-    ),
-    Log: (
-      <>
-        <Rect x={3.5} y={5} width={17} height={16} rx={2} {...p} />
-        <Path d="M3.5 10h17M8 3v4M16 3v4M8.5 14l2 2 4-4" {...p} />
-      </>
-    ),
-    Profile: (
-      <>
-        <Circle cx={12} cy={8.5} r={3.5} {...p} />
-        <Path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" {...p} />
-      </>
-    ),
-  };
-  return <Svg viewBox="0 0 24 24" width={20} height={20}>{shapes[name]}</Svg>;
+  const Icon = TAB_ICONS[name];
+  return Icon ? <Icon size={24} color={color} strokeWidth={2} /> : null;
 }
 
 function AddTabButton({ onPress }) {
@@ -73,9 +50,7 @@ function AddTabButton({ onPress }) {
   return (
     <Pressable onPress={onPress} style={tb.addWrap} accessibilityRole="button" accessibilityLabel="Add a piece">
       <View style={tb.addCircle}>
-        <Svg viewBox="0 0 24 24" width={16} height={16}>
-          <Path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth={2} strokeLinecap="round" />
-        </Svg>
+        <Plus size={16} color="#fff" strokeWidth={2} />
       </View>
     </Pressable>
   );

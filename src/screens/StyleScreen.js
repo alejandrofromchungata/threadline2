@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import Svg, { Path } from 'react-native-svg';
+import { CircleX, Heart, X } from 'lucide-react-native';
 import Garment from '../components/Garment';
 import { Button, Chip, Row, Stitch, Hint, Micro } from '../components/ui';
 import ChipPicker from '../components/ChipPicker';
@@ -19,24 +19,11 @@ const APPEARANCE_OPTIONS = [
 ];
 
 function NeedleIcon({ color }) {
-  return (
-    <Svg viewBox="0 0 24 24" width={34} height={34}>
-      <Path d="M6 18l9-13" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Path d="M15 5l2 1-1 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+  return <CircleX size={34} color={color} strokeWidth={2} />;
 }
 
 function ReactionBadgeIcon({ up, color }) {
-  return up ? (
-    <Svg viewBox="0 0 24 24" width={12} height={12}>
-      <Path d="M12 21s-7-4.4-9.5-8.8C.7 8.6 2.6 5 6.2 5c2 0 3.3 1 4.8 3 1.5-2 2.8-3 4.8-3 3.6 0 5.5 3.6 3.7 7.2C19 16.6 12 21 12 21Z" stroke={color} strokeWidth={2} fill="none" strokeLinejoin="round" />
-    </Svg>
-  ) : (
-    <Svg viewBox="0 0 24 24" width={10} height={10}>
-      <Path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
+  return up ? <Heart size={12} color={color} strokeWidth={2} /> : <X size={10} color={color} strokeWidth={2} />;
 }
 
 export default function StyleScreen({ onReset }) {

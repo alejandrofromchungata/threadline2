@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TextInput, Alert, Pressable } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import Svg, { Path } from 'react-native-svg';
+import { Search, CloudRain, X, Shuffle, Heart, Bookmark, ArrowLeft } from 'lucide-react-native';
 import Garment from '../components/Garment';
 import { Button, IconButton, Chip, Row, Eyebrow, Heading, Hint, Banner, CareCard } from '../components/ui';
 import { buildOutfit } from '../api';
@@ -18,51 +18,34 @@ import { useTheme } from '../ThemeContext';
 
 const QUICK = ['Work', 'Date Night', 'Casual', 'Wedding', 'Gym', 'Brunch'];
 
+// Lucide, matching the icon set Figma draws from.
 const SearchIcon = () => {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={18} height={18}>
-      <Path d="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z" stroke={T.muted} strokeWidth={2} fill="none" />
-      <Path d="M21 21l-4.3-4.3" stroke={T.muted} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
+  return <Search size={18} color={T.muted} strokeWidth={2} />;
 };
 const CloudRainIcon = () => {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={20} height={19}>
-      <Path
-        d="M6 14a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6 1.7A3.5 3.5 0 0 1 16.5 14H6Z"
-        stroke={T.indigo} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none"
-      />
-      <Path d="M8 18v1M12 18v2M16 18v1" stroke={T.indigo} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
+  return <CloudRain size={24} color={T.indigo} strokeWidth={2} />;
 };
-
 const XIcon = () => {
   const { T } = useTheme();
-  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 6l12 12M18 6L6 18" stroke={T.ink} strokeWidth={2} strokeLinecap="round" /></Svg>;
+  return <X size={18} color={T.ink} strokeWidth={2} />;
 };
 const ShuffleIcon = () => {
   const { T } = useTheme();
-  return (
-    <Svg viewBox="0 0 24 24" width={18} height={18}>
-      <Path d="M4 6h3l9 12h4M4 18h3l3-4M16 6h4M17 4l3 2-3 2M17 20l3-2-3-2" stroke={T.indigo} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
+  return <Shuffle size={18} color={T.indigo} strokeWidth={2} />;
 };
 const HeartIcon = () => {
   const { T } = useTheme();
-  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M12 21s-7-4.4-9.5-8.8C.7 8.6 2.6 5 6.2 5c2 0 3.3 1 4.8 3 1.5-2 2.8-3 4.8-3 3.6 0 5.5 3.6 3.7 7.2C19 16.6 12 21 12 21Z" stroke={T.rust} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
+  return <Heart size={18} color={T.rust} strokeWidth={2} />;
 };
 const BookmarkIcon = () => {
   const { T } = useTheme();
-  return <Svg viewBox="0 0 24 24" width={18} height={18}><Path d="M6 4h12v16l-6-4-6 4V4Z" stroke={T.indigo} strokeWidth={1.8} fill="none" strokeLinejoin="round" /></Svg>;
+  return <Bookmark size={18} color={T.indigo} strokeWidth={2} />;
 };
 const BackArrow = () => {
   const { T } = useTheme();
-  return <Svg viewBox="0 0 24 24" width={16} height={16}><Path d="M15 5l-7 7 7 7" stroke={T.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" /></Svg>;
+  return <ArrowLeft size={20} color={T.ink} strokeWidth={2} />;
 };
 
 export default function OutfitScreen() {

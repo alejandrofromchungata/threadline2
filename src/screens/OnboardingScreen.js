@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { CircleX, Camera, Pencil } from 'lucide-react-native';
 import { Button, Micro, Hint } from '../components/ui';
 import ChipPicker from '../components/ChipPicker';
 import { setSetting } from '../db';
@@ -9,31 +9,15 @@ import { STYLES, CONTEXTS, FONTS } from '../theme';
 import { useTheme } from '../ThemeContext';
 
 function NeedleIcon({ color, size = 60 }) {
-  return (
-    <Svg viewBox="0 0 24 24" width={size} height={size}>
-      <Path d="M6 18l9-13" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
-      <Path d="M15 5l2 1-1 2" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={7} cy={17} r={1.6} stroke={color} strokeWidth={1.2} fill="none" />
-    </Svg>
-  );
+  return <CircleX size={size} color={color} strokeWidth={1.6} />;
 }
 
 function CameraIcon() {
-  return (
-    <Svg viewBox="0 0 24 24" width={20} height={20}>
-      <Path d="M4 8h3l2-3h6l2 3h3v11H4V8Z" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <Circle cx={12} cy={13} r={3.5} stroke="#fff" strokeWidth={2} fill="none" />
-    </Svg>
-  );
+  return <Camera size={20} color="#fff" strokeWidth={2} />;
 }
 
 function PencilIcon() {
-  return (
-    <Svg viewBox="0 0 24 24" width={20} height={20}>
-      <Path d="M4 20l1-4 12-12 3 3-12 12-4 1Z" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <Line x1={14} y1={5} x2={17} y2={8} stroke="#fff" strokeWidth={2} />
-    </Svg>
-  );
+  return <Pencil size={20} color="#fff" strokeWidth={2} />;
 }
 
 export default function OnboardingScreen({ navigation, onDone }) {

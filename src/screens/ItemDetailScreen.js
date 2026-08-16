@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import Svg, { Path } from 'react-native-svg';
+import { ArrowLeft } from 'lucide-react-native';
 import Garment from '../components/Garment';
 import { Micro } from '../components/ui';
 import { getItem, getItemNumber, updateItem, deleteItem } from '../db';
@@ -13,11 +13,7 @@ import { useTheme } from '../ThemeContext';
 const STATUS_ORDER = ['clean', 'dirty', 'laundry', 'storage'];
 
 function BackArrow({ color }) {
-  return (
-    <Svg viewBox="0 0 24 24" width={20} height={20}>
-      <Path d="M15 5l-7 7 7 7" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
+  return <ArrowLeft size={20} color={color} strokeWidth={2} />;
 }
 
 export default function ItemDetailScreen({ route, navigation }) {

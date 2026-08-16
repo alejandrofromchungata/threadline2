@@ -61,16 +61,31 @@ export function Chip({ label, active, onPress, small, picker }) {
         pressed && { opacity: 0.75 },
       ]}
     >
-      <Text
-        style={[
-          s.chipText,
-          small && { fontSize: 12 },
-          picker && s.chipTextPicker,
-          active && s.chipTextOn,
-        ]}
-      >
-        {label}
-      </Text>
+      {/* Figma sets the selected label in Geist 600 and the rest in 500, which
+          would make a chip visibly widen the moment it is tapped. The hidden
+          copy is always semibold, so it reserves the wider width and the
+          visible label can change weight without shifting the layout. */}
+      <View>
+        <Text
+          aria-hidden
+          importantForAccessibility="no"
+          style={[s.chipText, small && { fontSize: 12 }, picker && s.chipTextPicker, s.chipSizer]}
+        >
+          {label}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            s.chipText,
+            small && { fontSize: 12 },
+            picker && s.chipTextPicker,
+            active && s.chipTextOn,
+            s.chipLabel,
+          ]}
+        >
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -213,6 +228,9 @@ const makeStyles = (T) => StyleSheet.create({
   chipText: { fontFamily: FONTS.sansMedium, fontSize: 13, lineHeight: 17, color: T.ink },
   chipTextPicker: { fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18 },
   chipTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
+  // Width reservation only — never drawn.
+  chipSizer: { fontFamily: FONTS.sansSemi, opacity: 0 },
+  chipLabel: { position: 'absolute', left: 0, right: 0, top: 0, textAlign: 'center' },
 
   btn: {
     backgroundColor: T.indigo, paddingVertical: 15, paddingHorizontal: 20,
