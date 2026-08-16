@@ -192,7 +192,14 @@ const makeStyles = (T) => StyleSheet.create({
   },
   sortLink: { fontFamily: FONTS.sansMedium, fontSize: 12, color: T.muted },
   sortOn: { color: T.indigo, textDecorationLine: 'underline' },
-  chipRow: { gap: 8, paddingLeft: 24, paddingRight: 12, paddingVertical: 12 },
+  // Must state direction and alignment explicitly. A horizontal ScrollView's
+  // content container otherwise falls back to alignItems:'stretch', which lets
+  // the pills be sized by the container instead of by their own label — the
+  // Profile chips behave because <Row> sets flexDirection:'row' itself.
+  chipRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingLeft: 24, paddingRight: 12, paddingVertical: 12,
+  },
   divider: { height: 1, backgroundColor: T.seam },
   empty: { padding: 40, alignItems: 'center' },
 });

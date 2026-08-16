@@ -173,7 +173,7 @@ export default function StyleScreen({ onReset }) {
         {!!learned.length && (
           <>
             <Stitch label="RECENT REACTIONS" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
               {learned.map((f) => {
                 const firstItem = (f.itemIds || []).map((id) => items.find((i) => i.id === id)).find(Boolean);
                 const up = f.verdict === 'up';
