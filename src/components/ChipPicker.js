@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { Search } from 'lucide-react-native';
 import { Chip, Row, Micro } from './ui';
 import { useTheme } from '../ThemeContext';
 
@@ -39,17 +40,20 @@ export default function ChipPicker({
 
   return (
     <View>
-      <TextInput
-        value={q}
-        onChangeText={setQ}
-        placeholder={placeholder}
-        placeholderTextColor="#A9A69C"
-        style={p.search}
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="done"
-        onSubmitEditing={canAdd ? add : undefined}
-      />
+      <View style={p.searchBox}>
+        <Search size={18} color={T.muted} strokeWidth={2} />
+        <TextInput
+          value={q}
+          onChangeText={setQ}
+          placeholder={placeholder}
+          placeholderTextColor={T.muted}
+          style={p.search}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={canAdd ? add : undefined}
+        />
+      </View>
 
       {canAdd && (
         <Pressable onPress={add} style={p.addRow}>
@@ -77,9 +81,14 @@ export default function ChipPicker({
 }
 
 const makeStyles = (T) => StyleSheet.create({
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    paddingHorizontal: 16, paddingVertical: 12,
+  },
   search: {
-    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 2,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: T.ink,
+    flex: 1, padding: 0,
+    fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18, color: T.ink,
   },
   addRow: {
     marginTop: 8, paddingVertical: 9, paddingHorizontal: 12,

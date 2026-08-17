@@ -46,6 +46,7 @@ export const DARK = {
 export const FONTS = {
   display: 'PlayfairDisplay_700Bold',
   displayRegular: 'PlayfairDisplay_400Regular',
+  displayMedium: 'PlayfairDisplay_500Medium',
   displayBlack: 'PlayfairDisplay_900Black',
   sans: 'Geist_400Regular',
   sansMedium: 'Geist_500Medium',

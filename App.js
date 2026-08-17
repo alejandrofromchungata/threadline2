@@ -10,7 +10,7 @@ import * as Notifications from 'expo-notifications';
 import { useShareIntent } from 'expo-share-intent';
 import { CircleX, Sparkles, CalendarCheck, User, Plus } from 'lucide-react-native';
 
-import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_900Black }
+import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_500Medium, PlayfairDisplay_900Black }
   from '@expo-google-fonts/playfair-display';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold }
   from '@expo-google-fonts/geist';
@@ -72,7 +72,7 @@ function AppContent() {
   const notificationSub = useRef(null);
 
   const [fontsLoaded] = useFonts({
-    PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_900Black,
+    PlayfairDisplay_700Bold, PlayfairDisplay_400Regular, PlayfairDisplay_500Medium, PlayfairDisplay_900Black,
     Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold,
     IBMPlexMono_400Regular, IBMPlexMono_600SemiBold,
   });

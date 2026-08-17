@@ -49,11 +49,11 @@ export default function OnboardingScreen({ navigation, onDone }) {
       <SafeAreaView style={o.safe} edges={['top', 'bottom']}>
         <View style={o.welcomeBody}>
           <View style={{ alignItems: 'center', gap: 16 }}>
-            <NeedleIcon color={T.indigo} />
+            <NeedleIcon color={T.indigo} size={72} />
             <Text style={o.wordmark}>Threadline</Text>
           </View>
           <View style={o.heroCard}>
-            <Micro>Woven in workrooms</Micro>
+            <Micro style={{ fontSize: 12, lineHeight: 16 }}>Woven in Workrooms</Micro>
             <View style={o.hr} />
             <Text style={o.heroTagline}>Turn your real clothes into a system that dresses you.</Text>
             <View style={o.hr} />
@@ -61,7 +61,7 @@ export default function OnboardingScreen({ navigation, onDone }) {
           </View>
         </View>
         <View style={o.footer}>
-          <Button title="Get Started" onPress={() => setStep(0)} />
+          <Button title="Get Started" onPress={() => setStep(0)} style={{ minHeight: 56, borderRadius: 28 }} />
         </View>
       </SafeAreaView>
     );
@@ -70,14 +70,14 @@ export default function OnboardingScreen({ navigation, onDone }) {
   return (
     <SafeAreaView style={o.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={o.body}>
-        <Micro style={{ color: T.indigo }}>
+        <Micro strong style={{ color: T.indigo, fontSize: 12, lineHeight: 16 }}>
           {step === 0 ? '01 / STYLE SELECTOR' : step === 1 ? '02 / OCCASION DIAL' : '03 / THE FIRST THREAD'}
         </Micro>
 
         {step === 0 && (
           <>
             <Text style={o.h2}>What's your style?</Text>
-            <Hint style={{ marginTop: 4 }}>Blending is expected. Select all that resonate.</Hint>
+            <Hint style={{ marginTop: 4, fontSize: 15, lineHeight: 21 }}>Blending is expected. Select all that resonate.</Hint>
             <View style={{ marginTop: 16 }}>
               <ChipPicker
                 options={STYLES}
@@ -98,7 +98,7 @@ export default function OnboardingScreen({ navigation, onDone }) {
         {step === 1 && (
           <>
             <Text style={o.h2}>Where do you show up?</Text>
-            <Hint style={{ marginTop: 4 }}>We filter styling algorithms based on your daily arenas.</Hint>
+            <Hint style={{ marginTop: 4, fontSize: 15, lineHeight: 21 }}>We filter styling algorithms based on your daily arenas.</Hint>
             <View style={{ marginTop: 16 }}>
               <ChipPicker
                 options={CONTEXTS}
@@ -118,7 +118,7 @@ export default function OnboardingScreen({ navigation, onDone }) {
         {step === 2 && (
           <>
             <Text style={o.h2}>Add your first piece</Text>
-            <Hint style={{ marginTop: 4 }}>
+            <Hint style={{ marginTop: 4, fontSize: 15, lineHeight: 21 }}>
               Start with whatever's nearby — a favorite structured jacket, a simple crisp tee, or your go-to denim.
             </Hint>
             <View style={{ height: 20 }} />
@@ -128,7 +128,7 @@ export default function OnboardingScreen({ navigation, onDone }) {
                 <View style={o.optionIcon}><CameraIcon /></View>
                 <Text style={o.optionTitle}>Take a Photo</Text>
               </View>
-              <Hint>
+              <Hint style={{ fontSize: 14, lineHeight: 20 }}>
                 Snap a picture against a flat background. Threadline isolates the item, reads what it is, and files it.
               </Hint>
             </Pressable>
@@ -138,7 +138,7 @@ export default function OnboardingScreen({ navigation, onDone }) {
                 <View style={o.optionIcon}><PencilIcon /></View>
                 <Text style={o.optionTitle}>Describe It</Text>
               </View>
-              <Hint>
+              <Hint style={{ fontSize: 14, lineHeight: 20 }}>
                 Type the brand, material, and colour. Threadline searches the web for the real product.
               </Hint>
             </Pressable>
@@ -152,10 +152,10 @@ export default function OnboardingScreen({ navigation, onDone }) {
 
       {step < 2 && (
         <View style={o.nav}>
-          {step > 0 && <Button title="Back" variant="ghost" style={{ flex: 1 }} onPress={() => setStep(step - 1)} />}
+          {step > 0 && <Button title="Back" variant="ghost" style={{ flex: 1, minHeight: 56, borderRadius: 28 }} onPress={() => setStep(step - 1)} />}
           <Button
             title="Next"
-            style={{ flex: 1 }}
+            style={{ flex: 1, minHeight: 56, borderRadius: 28 }}
             disabled={step === 0 && styles.length === 0}
             onPress={() => setStep(step + 1)}
           />
@@ -169,15 +169,15 @@ const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   body: { padding: 24, paddingTop: 24 },
   welcomeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 40 },
-  wordmark: { fontFamily: FONTS.displayBlack, fontSize: 40, color: T.indigo },
+  wordmark: { fontFamily: FONTS.displayBlack, fontSize: 48, lineHeight: 64, color: T.indigo },
   heroCard: {
     width: '100%', backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
     padding: 24, gap: 16,
   },
-  heroTagline: { fontFamily: FONTS.display, fontSize: 22, lineHeight: 29, color: T.ink },
+  heroTagline: { fontFamily: FONTS.displayMedium, fontSize: 28, lineHeight: 36, color: T.ink },
   hr: { height: 1, backgroundColor: T.seam },
   footer: { padding: 24, paddingTop: 12 },
-  h2: { fontFamily: FONTS.display, fontSize: 30, color: T.ink, marginTop: 8 },
+  h2: { fontFamily: FONTS.display, fontSize: 32, lineHeight: 43, color: T.ink, marginTop: 8 },
   optionCard: {
     backgroundColor: T.card, borderWidth: 2, borderColor: T.seam, borderRadius: 12,
     padding: 20, gap: 12, marginBottom: 16,
