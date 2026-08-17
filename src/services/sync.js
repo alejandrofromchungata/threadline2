@@ -93,12 +93,28 @@ const TABLES = {
 
 const EPOCH = '1970-01-01T00:00:00.000Z';
 
+/**
+ * Timestamps are compared as strings by SQLite, but Postgres renders a
+ * timestamptz as "2026-08-17T20:00:00.123456+00:00" while JavaScript writes
+ * "2026-08-17T20:00:00.123Z". Those are the same instant and compare unequal,
+ * which would corrupt both conflict resolution and the sync cursor. Every
+ * timestamp crossing the boundary is normalised to one canonical form.
+ */
+const isoField = (name) => name.endsWith('At');
+const normIso = (v) => {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+};
+
 const toRemote = (row, spec, userId) => {
   const out = { user_id: userId };
   for (const [local, remote] of Object.entries(spec.fields)) {
     let v = row[local];
     if (spec.json.includes(local)) {
       try { v = JSON.parse(v || '[]'); } catch { v = []; }
+    } else if (isoField(local)) {
+      v = normIso(v);
     }
     out[remote] = v ?? null;
   }
@@ -110,6 +126,7 @@ const toLocal = (row, spec) => {
   for (const [local, remote] of Object.entries(spec.fields)) {
     let v = row[remote];
     if (spec.json.includes(local)) v = JSON.stringify(v ?? []);
+    else if (isoField(local)) v = normIso(v);
     out[local] = v ?? null;
   }
   return out;
@@ -180,7 +197,7 @@ async function syncSettings(userId, since) {
       key: r.key,
       // Stored as a JSON string locally; the column is jsonb.
       value: (() => { try { return JSON.parse(r.value); } catch { return null; } })(),
-      updated_at: r.updatedAt,
+      updated_at: normIso(r.updatedAt),
     }));
     const { error } = await supabase.from('user_settings').upsert(payload, { onConflict: 'user_id,key' });
     if (error) throw new Error(`push settings: ${error.message}`);
@@ -193,7 +210,7 @@ async function syncSettings(userId, since) {
       `INSERT INTO settings (key, value, updatedAt) VALUES (?,?,?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
        WHERE excluded.updatedAt > settings.updatedAt`,
-      r.key, JSON.stringify(r.value), r.updated_at,
+      r.key, JSON.stringify(r.value), normIso(r.updated_at),
     );
   }
   return (data ?? []).length + local.length;
