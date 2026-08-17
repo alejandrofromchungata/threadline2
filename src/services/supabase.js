@@ -1,7 +1,24 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
+
+/**
+ * expo-secure-store is a native module, so it only exists in a build that was
+ * compiled with it. Requiring it eagerly means an older build cannot even
+ * start — the failure is a blank "App entry not found", not a disabled
+ * sign-in. Load it defensively and degrade instead.
+ */
+let SecureStore = null;
+try {
+  // eslint-disable-next-line global-require
+  const mod = require('expo-secure-store');
+  // Touch the API: the require can succeed while the native side is absent.
+  if (typeof mod?.getItemAsync === 'function') SecureStore = mod;
+} catch {
+  SecureStore = null;
+}
+
+export const hasSecureStorage = !!SecureStore;
 
 const { supabaseUrl, supabaseAnonKey } = Constants.expoConfig?.extra ?? {};
 
@@ -15,7 +32,7 @@ const { supabaseUrl, supabaseAnonKey } = Constants.expoConfig?.extra ?? {};
  */
 const CHUNK = 1800;
 
-const secureStorage = {
+const secureStorage = SecureStore && {
   async getItem(key) {
     const head = await SecureStore.getItemAsync(`${key}.0`);
     if (head === null) return null;
@@ -42,13 +59,27 @@ const secureStorage = {
   },
 };
 
+/**
+ * Sessions are only kept when the keychain is actually available. Without it
+ * the app still signs in, but the session is not written anywhere and is gone
+ * on restart — better than silently putting credentials somewhere unencrypted.
+ */
+const memoryStorage = (() => {
+  const map = new Map();
+  return {
+    getItem: async (k) => (map.has(k) ? map.get(k) : null),
+    setItem: async (k, v) => { map.set(k, v); },
+    removeItem: async (k) => { map.delete(k); },
+  };
+})();
+
 /** Null until the project keys are configured, so the app can run without them. */
 export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        storage: secureStorage,
+        storage: SecureStore ? secureStorage : memoryStorage,
+        persistSession: !!SecureStore,
         autoRefreshToken: true,
-        persistSession: true,
         // There is no URL bar to read a token back from in a native app.
         detectSessionInUrl: false,
       },
