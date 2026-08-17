@@ -123,3 +123,17 @@ create index if not exists wear_log_user_updated_idx on public.wear_log (user_id
 create index if not exists feedback_user_updated_idx on public.feedback (user_id, updated_at);
 create index if not exists saved_outfits_user_updated_idx on public.saved_outfits (user_id, updated_at);
 create index if not exists user_settings_user_updated_idx on public.user_settings (user_id, updated_at);
+
+-- ── server clock ────────────────────────────────────────────────────────
+-- The sync cursor is "everything changed since X". Taking X from the device
+-- means a phone with a wrong clock either re-syncs everything forever or
+-- silently skips rows, so the value comes from the server instead.
+create or replace function public.now_iso()
+returns text
+language sql
+stable
+as $$
+  select to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+$$;
+
+grant execute on function public.now_iso() to anon, authenticated;

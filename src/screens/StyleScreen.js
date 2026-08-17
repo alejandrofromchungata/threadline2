@@ -87,7 +87,7 @@ function ValueRow({ label, value, onPress, pill }) {
 
 export default function StyleScreen({ onReset }) {
   const { T, mode, setMode } = useTheme();
-  const { profile: account, configured, signOut } = useAuth();
+  const { profile: account, configured, signOut, syncing, lastSyncError, runSync } = useAuth();
   const st = useMemo(() => makeStyles(T), [T]);
   const [profile, setProfile] = useState({ styles: [], contexts: [], customStyles: [], customContexts: [] });
   const [learned, setLearned] = useState([]);
@@ -99,6 +99,11 @@ export default function StyleScreen({ onReset }) {
   const [laundryReminders, setLaundryRemindersState] = useState(true);
   const [defaultSort, setDefaultSortState] = useState('recent');
   const [laundryThreshold, setLaundryThresholdState] = useState(8);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+
+  const lastSyncLabel = lastSyncAt
+    ? new Date(lastSyncAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Not yet';
 
   const sortLabel = (SORTS.find(([k]) => k === defaultSort) || SORTS[0])[1];
 
@@ -169,9 +174,15 @@ export default function StyleScreen({ onReset }) {
     setLaundryRemindersState(await getSetting('laundryReminders', true));
     setDefaultSortState(await getSetting('defaultSort', 'recent'));
     setLaundryThresholdState(await getSetting('laundryThreshold', 8));
+    setLastSyncAt(await getSetting('lastSyncAt', null));
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Pick up the new timestamp once a sync settles.
+  React.useEffect(() => {
+    if (!syncing) getSetting('lastSyncAt', null).then(setLastSyncAt);
+  }, [syncing]);
 
   const save = async (next) => {
     setProfile(next);
@@ -363,6 +374,12 @@ export default function StyleScreen({ onReset }) {
           <SettingsCard label="Account" caption="Signed in to Threadline">
             <ValueRow label="Display name" value={account.display_name} />
             <ValueRow label="Username" value={`@${account.username}`} />
+            <ValueRow
+              label="Wardrobe sync"
+              value={syncing ? 'Syncing…' : lastSyncError ? 'Failed — tap to retry' : lastSyncLabel}
+              onPress={syncing ? undefined : runSync}
+            />
+            {!!lastSyncError && <Hint style={{ color: T.rust }}>{lastSyncError}</Hint>}
             <Pressable onPress={confirmSignOut} style={st.dashedBtn} accessibilityRole="button">
               <Text style={st.dashedBtnText}>SIGN OUT</Text>
             </Pressable>
