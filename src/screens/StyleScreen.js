@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable, Switch } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable, Switch, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -9,14 +9,16 @@ import { Button, Chip, Row, Stitch, Hint, Micro } from '../components/ui';
 import ChipPicker from '../components/ChipPicker';
 import { getSetting, setSetting, wipeAll, recentFeedback, listItems, listWearLog } from '../db';
 import { cancelLaundryReminder } from '../services/notifications';
+import { exportWardrobeCsv } from '../services/exportCsv';
 import { API_BASE } from '../api';
-import { STYLES, CONTEXTS, FONTS } from '../theme';
+import { STYLES, CONTEXTS, SORTS, FONTS } from '../theme';
 import Constants from 'expo-constants';
 import { useTheme } from '../ThemeContext';
 
 const TABS = [['preferences', 'Preferences'], ['settings', 'Settings']];
 
 const appVersion = Constants.expoConfig?.version || '1.0.0';
+const FEEDBACK_EMAIL = 'alejandrofromchungata@gmail.com';
 
 const APPEARANCE_OPTIONS = [
   ['system', 'Match phone'],
@@ -32,6 +34,56 @@ function ReactionBadgeIcon({ up, color }) {
   return up ? <Heart size={12} color={color} strokeWidth={2} /> : <X size={10} color={color} strokeWidth={2} />;
 }
 
+/** Figma's settings card: mono caps label, optional caption, dashed rule, rows. */
+function SettingsCard({ label, caption, children }) {
+  const { T } = useTheme();
+  const st = useMemo(() => makeStyles(T), [T]);
+  return (
+    <View style={st.card}>
+      <Micro>{label}</Micro>
+      {!!caption && <Text style={st.cardCaption}>{caption}</Text>}
+      <View style={st.dashedRule} />
+      {children}
+    </View>
+  );
+}
+
+function ToggleRow({ label, value, onValueChange }) {
+  const { T } = useTheme();
+  const st = useMemo(() => makeStyles(T), [T]);
+  return (
+    <View style={st.settingRow}>
+      <Text style={st.settingLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: T.seam, true: T.indigo }}
+        thumbColor="#fff"
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
+
+function ValueRow({ label, value, onPress, pill }) {
+  const { T } = useTheme();
+  const st = useMemo(() => makeStyles(T), [T]);
+  const body = (
+    <View style={st.settingRow}>
+      <Text style={st.settingLabel}>{label}</Text>
+      {pill
+        ? <View style={st.valuePill}><Text style={st.valuePillText}>{value}</Text></View>
+        : <Text style={[st.settingValue, !!onPress && { color: T.indigo }]}>{value}</Text>}
+    </View>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${value}`}>
+      {body}
+    </Pressable>
+  );
+}
+
 export default function StyleScreen({ onReset }) {
   const { T, mode, setMode } = useTheme();
   const st = useMemo(() => makeStyles(T), [T]);
@@ -43,6 +95,39 @@ export default function StyleScreen({ onReset }) {
   const [editingContexts, setEditingContexts] = useState(false);
   const [tab, setTab] = useState('preferences');
   const [laundryReminders, setLaundryRemindersState] = useState(true);
+  const [defaultSort, setDefaultSortState] = useState('recent');
+  const [laundryThreshold, setLaundryThresholdState] = useState(8);
+
+  const sortLabel = (SORTS.find(([k]) => k === defaultSort) || SORTS[0])[1];
+
+  const pickSort = () => {
+    Alert.alert('Default sort', 'How the closet is ordered when it opens.', [
+      ...SORTS.map(([k, label]) => ({
+        text: label,
+        onPress: async () => { setDefaultSortState(k); await setSetting('defaultSort', k); },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const pickThreshold = () => {
+    Alert.alert('Laundry threshold', 'How many worn pieces before a reminder.', [
+      ...[4, 6, 8, 10, 12].map((n) => ({
+        text: `${n} worn items`,
+        onPress: async () => { setLaundryThresholdState(n); await setSetting('laundryThreshold', n); },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const exportCsv = async () => {
+    try {
+      const uri = await exportWardrobeCsv(items);
+      await Share.share({ url: uri, title: 'Threadline wardrobe' });
+    } catch (e) {
+      Alert.alert('Could not export', e.message || 'Something went wrong writing the file.');
+    }
+  };
 
   // Persisted so the outfit flow can honour it when it would otherwise
   // schedule a reminder — this toggle changes real behaviour, not just UI.
@@ -61,6 +146,8 @@ export default function StyleScreen({ onReset }) {
     setItems(closet);
     setWornCount(log.length);
     setLaundryRemindersState(await getSetting('laundryReminders', true));
+    setDefaultSortState(await getSetting('defaultSort', 'recent'));
+    setLaundryThresholdState(await getSetting('laundryThreshold', 8));
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -241,41 +328,49 @@ export default function StyleScreen({ onReset }) {
 
         {tab === 'settings' && (
         <>
-        <Stitch label="NOTIFICATIONS" />
-        <View style={st.settingRow}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={st.settingLabel}>Laundry reminders</Text>
-            <Hint>Nudge me when the worn pile is worth a wash.</Hint>
-          </View>
-          <Switch
+        <SettingsCard label="Notifications" caption="Tailored workroom alerts">
+          <ToggleRow
+            label="Laundry reminders"
             value={laundryReminders}
             onValueChange={setLaundryReminders}
-            trackColor={{ false: T.seam, true: T.indigo }}
-            thumbColor="#fff"
           />
-        </View>
+        </SettingsCard>
 
-        <Stitch label="YOUR DATA & PRIVACY" />
-        <View style={st.privacyCard}>
-          <Micro>Wardrobe data & sources</Micro>
-          <View style={st.hr} />
+        <SettingsCard label="Closet">
+          <ValueRow label="Default sort" value={sortLabel} onPress={pickSort} pill />
+          <ValueRow
+            label="Laundry threshold"
+            value={`${laundryThreshold} worn items`}
+            onPress={pickThreshold}
+          />
+        </SettingsCard>
+
+        <SettingsCard label="Data management" caption="Everything lives on this phone">
           <Text style={st.privacyText}>
-            Your closet, photos and history stay in this app's storage on your phone. Photos are sent once
-            to {API_BASE ? new URL(API_BASE).host : 'the Threadline service'} for background removal and tagging,
-            and are not sold, retained, or used to train anything.
+            Your closet, photos and history stay in this app's storage. Photos are sent once
+            to {API_BASE ? new URL(API_BASE).host : 'the Threadline service'} for background removal
+            and tagging, and are not sold, retained, or used to train anything.
           </Text>
-          <View style={st.hr} />
+          <Pressable onPress={exportCsv} style={st.dashedBtn} accessibilityRole="button">
+            <Text style={st.dashedBtnText}>EXPORT WARDROBE AS CSV</Text>
+          </Pressable>
           <Pressable onPress={() => Linking.openURL('https://yourdomain.example/threadline/privacy')}>
             <Micro style={{ color: T.indigo }}>Plain text privacy policy</Micro>
           </Pressable>
-        </View>
-        <Button title="Erase All Local Wardrobe Data" variant="danger" style={{ marginTop: 12 }} onPress={reset} />
+        </SettingsCard>
 
-        <Stitch label="ABOUT" />
-        <View style={st.settingRow}>
-          <Text style={st.settingLabel}>Version</Text>
-          <Text style={st.settingValue}>{appVersion}</Text>
-        </View>
+        <SettingsCard label="About Threadline">
+          <ValueRow label="Version" value={appVersion} />
+          <ValueRow
+            label="Send feedback"
+            value="Email"
+            onPress={() => Linking.openURL(
+              `mailto:${FEEDBACK_EMAIL}?subject=Threadline%20feedback%20(v${appVersion})`
+            )}
+          />
+        </SettingsCard>
+
+        <Button title="Erase All Local Wardrobe Data" variant="danger" style={{ marginTop: 4 }} onPress={reset} />
         </>
         )}
       </ScrollView>
@@ -298,6 +393,24 @@ const makeStyles = (T) => StyleSheet.create({
   segOn: { backgroundColor: T.indigo },
   segText: { fontFamily: FONTS.sansMedium, fontSize: 14, lineHeight: 18, color: T.muted },
   segTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
+  card: {
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    padding: 16, marginBottom: 16,
+  },
+  cardCaption: { fontFamily: FONTS.sans, fontSize: 13, lineHeight: 17, color: T.muted, marginTop: 2 },
+  dashedRule: {
+    borderTopWidth: 1, borderColor: T.seam, borderStyle: 'dashed', marginTop: 12, marginBottom: 4,
+  },
+  valuePill: {
+    borderWidth: 1, borderColor: T.seam, backgroundColor: T.paper, borderRadius: 6,
+    paddingVertical: 6, paddingHorizontal: 12,
+  },
+  valuePillText: { fontFamily: FONTS.mono, fontSize: 12, lineHeight: 16, color: T.ink },
+  dashedBtn: {
+    borderWidth: 1, borderColor: T.indigo, borderStyle: 'dashed', borderRadius: 6,
+    paddingVertical: 14, alignItems: 'center', marginTop: 14, marginBottom: 12,
+  },
+  dashedBtnText: { fontFamily: FONTS.monoSemi, fontSize: 12, lineHeight: 16, color: T.indigo },
   settingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 12, gap: 12,
@@ -327,9 +440,5 @@ const makeStyles = (T) => StyleSheet.create({
     position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
-  hr: { height: 1, backgroundColor: T.seam, marginVertical: 12 },
-  privacyCard: {
-    borderWidth: 1, borderColor: T.seam, backgroundColor: T.card, borderRadius: 8, padding: 16,
-  },
-  privacyText: { fontFamily: FONTS.displayRegular, fontSize: 15, lineHeight: 21, color: T.ink },
+  privacyText: { fontFamily: FONTS.sans, fontSize: 13, lineHeight: 18, color: T.muted, marginTop: 8 },
 });

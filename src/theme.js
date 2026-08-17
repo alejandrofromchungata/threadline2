@@ -55,6 +55,14 @@ export const FONTS = {
   monoSemi: 'IBMPlexMono_600SemiBold',
 };
 
+/** Closet sort orders, shared by the closet header and the settings default. */
+export const SORTS = [
+  ['recent', 'Added'],
+  ['worn', 'Most worn'],
+  ['cpw', 'Cost per wear'],
+  ['name', 'A–Z'],
+];
+
 export const CATEGORIES = [
   'headwear', 'tops', 'innerwear', 'outerwear',
   'pants', 'dresses', 'shoes', 'accessories',

@@ -8,16 +8,9 @@ import { CircleX, SlidersHorizontal, Search } from 'lucide-react-native';
 import ItemCard from '../components/ItemCard';
 import { Chip, Button, Hint, Eyebrow, Heading } from '../components/ui';
 import Garment from '../components/Garment';
-import { listItems } from '../db';
-import { FONTS, CATEGORIES } from '../theme';
+import { listItems, getSetting } from '../db';
+import { FONTS, CATEGORIES, SORTS } from '../theme';
 import { useTheme } from '../ThemeContext';
-
-const SORTS = [
-  ['recent', 'added'],
-  ['worn', 'most worn'],
-  ['cpw', 'cost per wear'],
-  ['name', 'a–z'],
-];
 
 // Figma draws these with Lucide: circle-x for the wordmark, sliders-horizontal
 // for sort, search for the filter field.
@@ -49,8 +42,11 @@ export default function ClosetScreen({ navigation }) {
   const { width } = useWindowDimensions();
 
   const load = useCallback(async () => {
-    const rows = await listItems();
+    const [rows, defaultSort] = await Promise.all([
+      listItems(), getSetting('defaultSort', 'recent'),
+    ]);
     setItems(rows);
+    setSort(defaultSort);
     setLoading(false);
   }, []);
 
