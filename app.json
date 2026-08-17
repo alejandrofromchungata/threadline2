@@ -78,7 +78,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "REPLACE_WITH_REVERSED_CLIENT_ID"
+          "iosUrlScheme": "com.googleusercontent.apps.1067972270447-om4v9kqdft7ovgq2iue3cdevqnp8jca1"
         }
       ]
     ],
@@ -93,8 +93,8 @@
       },
       "supabaseUrl": "https://swgtvbqpnawtzmeezfep.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3Z3R2YnFwbmF3dHptZWV6ZmVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5ODcyMzYsImV4cCI6MjEwMjU2MzIzNn0.7zrcyCn2Okycf_z18jlD2_U-Wdat2RByNspbanLNMoo",
-      "googleIosClientId": "",
-      "googleWebClientId": ""
+      "googleIosClientId": "1067972270447-om4v9kqdft7ovgq2iue3cdevqnp8jca1.apps.googleusercontent.com",
+      "googleWebClientId": "1067972270447-mce2u6bjjichb4dulqiip3l2u7mc8ud2.apps.googleusercontent.com"
     },
     "privacy": "public"
   }
