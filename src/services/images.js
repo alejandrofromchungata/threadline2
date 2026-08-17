@@ -78,12 +78,16 @@ export async function removeBackgroundToCloset(uri, id, base64) {
   const native = getNativeRemover();
   if (native?.removeBackground) {
     try {
-      if (await native.isNativeBackgroundRemovalSupported()) {
-        const cutUri = await native.removeBackground(uri, { trim: true });
-        return await adoptIntoCloset(cutUri, id);
-      }
+      // Call removeBackground directly and let it throw. Do NOT use the
+      // library's isNativeBackgroundRemovalSupported() probe: it invokes the
+      // native method with no options argument, and the bridge dereferences
+      // that argument unconditionally (options.trim()), which hard-crashes the
+      // app rather than throwing something catchable. Always pass options.
+      const cutUri = await native.removeBackground(uri, { trim: true });
+      if (cutUri && cutUri !== uri) return await adoptIntoCloset(cutUri, id);
     } catch {
-      // Simulator, iOS < 17, or no subject found — fall through to the service.
+      // REQUIRES_API_FALLBACK on iOS < 17, the simulator, or no subject
+      // found — fall through to the service.
     }
   }
   const encoded = base64 ?? (await prepareForUpload(uri)).base64;
