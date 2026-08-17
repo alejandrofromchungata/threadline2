@@ -6,9 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
-import { ArrowLeft, Link2 } from 'lucide-react-native';
+import { ArrowLeft, Link2, Check } from 'lucide-react-native';
 import Slider from '../components/Slider';
-import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
+import { Button, Field, Hint, Micro, Row, Banner, Sheet } from '../components/ui';
 import Garment from '../components/Garment';
 import { tagPhoto, readProduct, tagProduct, findProduct } from '../api';
 import { prepareForUpload, removeBackgroundToCloset, saveRemoteCutout, deleteImage } from '../services/images';
@@ -597,11 +597,7 @@ function DraftForm({ draft, setDraft, onSave, onDiscard, editing }) {
               placeholder="COS"
             />
             <SlipField label="Category" style={{ flex: 1 }} static>
-              <Row style={{ gap: 6 }}>
-                {CATEGORIES.map((c) => (
-                  <SlipChip key={c} label={c} active={draft.category === c} onPress={() => set('category', c)} />
-                ))}
-              </Row>
+              <CategoryField value={draft.category} onChange={(c) => set('category', c)} />
             </SlipField>
           </View>
 
@@ -699,6 +695,69 @@ function SlipField({ label, children, big, tint, style, static: isStatic, ...inp
       )}
       <View style={a.slipLine} />
     </View>
+  );
+}
+
+const titleCase = (s = '') => s.replace(/^\w/, (c) => c.toUpperCase());
+
+/**
+ * Category as a single tappable value that opens a searchable sheet, rather
+ * than a row of eight chips. Eight of anything is a lot of room to spend on a
+ * field you set once.
+ */
+function CategoryField({ value, onChange }) {
+  const { T } = useTheme();
+  const a = useMemo(() => makeStyles(T), [T]);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? CATEGORIES.filter((c) => c.includes(needle)) : CATEGORIES;
+
+  const choose = (c) => {
+    onChange(c);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Category, ${value}. Tap to change.`}
+      >
+        <Text style={a.slipValue}>{titleCase(value)}</Text>
+      </Pressable>
+
+      <Sheet visible={open} title="Category" onClose={() => { setQuery(''); setOpen(false); }}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search categories…"
+          placeholderTextColor={T.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={a.pickerSearch}
+        />
+        {shown.map((c) => {
+          const active = c === value;
+          return (
+            <Pressable
+              key={c}
+              onPress={() => choose(c)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={({ pressed }) => [a.pickerRow, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={[a.pickerLabel, active && a.pickerLabelOn]}>{titleCase(c)}</Text>
+              {active && <Check size={18} color={T.indigo} strokeWidth={2.5} />}
+            </Pressable>
+          );
+        })}
+        {!shown.length && <Hint style={{ paddingVertical: 12 }}>No category matches “{query}”.</Hint>}
+      </Sheet>
+    </>
   );
 }
 
@@ -811,6 +870,17 @@ const makeStyles = (T) => StyleSheet.create({
   slipChipTextOn: { color: '#fff' },  // colour only — a heavier face resizes the chip
   swatchDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: T.seam },
   swatchDotOn: { borderWidth: 2, borderColor: T.indigo },
+  pickerSearch: {
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
+    fontFamily: FONTS.sans, fontSize: 15, color: T.ink,
+  },
+  pickerRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, borderBottomWidth: 1, borderColor: T.seam,
+  },
+  pickerLabel: { fontFamily: FONTS.sans, fontSize: 16, lineHeight: 21, color: T.ink },
+  pickerLabelOn: { fontFamily: FONTS.sansSemi, color: T.indigo },
   backEdit: { paddingVertical: 8, alignItems: 'center', marginTop: 12 },
   backEditText: { fontFamily: FONTS.sans, fontSize: 14, lineHeight: 18, color: T.muted },
 });
