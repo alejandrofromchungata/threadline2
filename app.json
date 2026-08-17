@@ -74,7 +74,13 @@
         }
       ],
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "REPLACE_WITH_REVERSED_CLIENT_ID"
+        }
+      ]
     ],
     "web": {
       "bundler": "metro",
@@ -86,7 +92,9 @@
         "projectId": "62217c40-b293-4f1e-89c4-18eb7c2145b8"
       },
       "supabaseUrl": "https://swgtvbqpnawtzmeezfep.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3Z3R2YnFwbmF3dHptZWV6ZmVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5ODcyMzYsImV4cCI6MjEwMjU2MzIzNn0.7zrcyCn2Okycf_z18jlD2_U-Wdat2RByNspbanLNMoo"
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3Z3R2YnFwbmF3dHptZWV6ZmVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5ODcyMzYsImV4cCI6MjEwMjU2MzIzNn0.7zrcyCn2Okycf_z18jlD2_U-Wdat2RByNspbanLNMoo",
+      "googleIosClientId": "",
+      "googleWebClientId": ""
     },
     "privacy": "public"
   }

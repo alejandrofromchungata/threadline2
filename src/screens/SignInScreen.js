@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TextInput, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 import { CircleX, Mail } from 'lucide-react-native';
 import { Button, Micro, Hint, Banner } from '../components/ui';
 import { supabase } from '../services/supabase';
@@ -9,6 +10,32 @@ import { FONTS } from '../theme';
 import { useTheme } from '../ThemeContext';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const { googleIosClientId, googleWebClientId } = Constants.expoConfig?.extra ?? {};
+
+/**
+ * Loaded defensively for the same reason as SecureStore: it is a native
+ * module, so an older build does not contain it, and requiring it eagerly
+ * would stop the whole sign-in screen from rendering rather than just hiding
+ * one button.
+ */
+let GoogleSignin = null;
+try {
+  // eslint-disable-next-line global-require
+  const mod = require('@react-native-google-signin/google-signin');
+  if (mod?.GoogleSignin?.configure) {
+    GoogleSignin = mod.GoogleSignin;
+    if (googleIosClientId && googleWebClientId) {
+      // webClientId is what makes Google return an idToken Supabase can verify;
+      // without it the sign-in succeeds locally and then fails server-side.
+      GoogleSignin.configure({ iosClientId: googleIosClientId, webClientId: googleWebClientId });
+    }
+  }
+} catch {
+  GoogleSignin = null;
+}
+
+const googleReady = !!GoogleSignin && !!googleIosClientId && !!googleWebClientId;
 
 export default function SignInScreen() {
   const { T } = useTheme();
@@ -43,6 +70,15 @@ export default function SignInScreen() {
       const { error: e } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (e) throw e;
     }
+  });
+
+  const signInWithGoogle = () => withBusy(async () => {
+    await GoogleSignin.hasPlayServices();
+    const res = await GoogleSignin.signIn();
+    const idToken = res?.data?.idToken ?? res?.idToken;
+    if (!idToken) throw new Error('Google did not return a sign-in token.');
+    const { error: e } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+    if (e) throw e;
   });
 
   const signInWithApple = () => withBusy(async () => {
@@ -91,6 +127,17 @@ export default function SignInScreen() {
             style={s.appleBtn}
             onPress={signInWithApple}
           />
+        )}
+
+        {googleReady && (
+          <Pressable
+            onPress={signInWithGoogle}
+            disabled={busy}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.googleBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={s.googleText}>Continue with Google</Text>
+          </Pressable>
         )}
 
         <View style={s.divider}>
@@ -169,6 +216,12 @@ const makeStyles = (T) => StyleSheet.create({
   hr: { height: 1, backgroundColor: T.seam },
   tagline: { fontFamily: FONTS.displayMedium, fontSize: 20, lineHeight: 27, color: T.ink },
   appleBtn: { height: 56, marginTop: 20 },
+  googleBtn: {
+    height: 56, borderRadius: 28, marginTop: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: T.card, borderWidth: 1, borderColor: T.seamDark,
+  },
+  googleText: { fontFamily: FONTS.sansSemi, fontSize: 16, lineHeight: 21, color: T.ink },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: T.seam },
   field: { marginBottom: 14 },
