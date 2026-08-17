@@ -120,6 +120,17 @@ export default function StyleScreen({ onReset }) {
     ]);
   };
 
+  // A mailto: link goes nowhere if no mail account is set up, and the tap would
+  // otherwise just do nothing. Show the address so it can still be copied.
+  const sendFeedback = async () => {
+    const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(`Threadline feedback (v${appVersion})`)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('No mail app set up', `Send feedback to ${FEEDBACK_EMAIL}`);
+    }
+  };
+
   const exportCsv = async () => {
     try {
       const uri = await exportWardrobeCsv(items);
@@ -364,9 +375,7 @@ export default function StyleScreen({ onReset }) {
           <ValueRow
             label="Send feedback"
             value="Email"
-            onPress={() => Linking.openURL(
-              `mailto:${FEEDBACK_EMAIL}?subject=Threadline%20feedback%20(v${appVersion})`
-            )}
+            onPress={sendFeedback}
           />
         </SettingsCard>
 
