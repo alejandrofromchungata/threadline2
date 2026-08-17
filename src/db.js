@@ -60,10 +60,54 @@ export function getDb() {
       // Added after the original feedback table shipped — lets the profile
       // screen show the actual reacted-to photo instead of just its name.
       try { await db.execAsync('ALTER TABLE feedback ADD COLUMN itemIds TEXT'); } catch { /* already there */ }
+      await addSyncColumns(db);
       return db;
     })();
   }
   return dbPromise;
+}
+
+/** Tables that sync to the account, and therefore need change tracking. */
+export const SYNCED_TABLES = ['items', 'wear_log', 'feedback', 'saved_outfits'];
+
+/**
+ * Prepare existing installs for sync.
+ *
+ * Two problems with the original schema:
+ *   1. No change tracking, so there is no way to ask what to push.
+ *   2. wear_log, feedback and saved_outfits use INTEGER PRIMARY KEY
+ *      AUTOINCREMENT. Two phones offline would both mint id 1, id 2, and
+ *      collide the moment they sync.
+ *
+ * The fix for (2) is a separate text `uid` column rather than rewriting the
+ * primary key: rebuilding those tables would mean copying rows and risking
+ * real wear history for a schema nicety. Local code keeps using the integer
+ * id; sync uses `uid`, which is stable and globally unique.
+ *
+ * Every statement is additive, so nothing is dropped and no row is rewritten
+ * beyond backfilling the new columns.
+ */
+async function addSyncColumns(db) {
+  for (const table of SYNCED_TABLES) {
+    for (const col of ['updatedAt TEXT', 'deletedAt TEXT']) {
+      try { await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${col}`); } catch { /* already there */ }
+    }
+    // Treat pre-existing rows as changed once, so the first sync uploads them.
+    await db.execAsync(`UPDATE ${table} SET updatedAt = COALESCE(updatedAt, datetime('now'))`);
+  }
+
+  for (const table of ['wear_log', 'feedback', 'saved_outfits']) {
+    try { await db.execAsync(`ALTER TABLE ${table} ADD COLUMN uid TEXT`); } catch { /* already there */ }
+    // Backfill deterministically: the same row keeps the same uid on re-run.
+    const rows = await db.getAllAsync(`SELECT id FROM ${table} WHERE uid IS NULL`);
+    for (const row of rows) {
+      await db.runAsync(`UPDATE ${table} SET uid = ? WHERE id = ?`, `${table}-${row.id}-${newId()}`, row.id);
+    }
+    await db.execAsync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_uid ON ${table}(uid)`);
+  }
+
+  try { await db.execAsync('ALTER TABLE settings ADD COLUMN updatedAt TEXT'); } catch { /* already there */ }
+  await db.execAsync("UPDATE settings SET updatedAt = COALESCE(updatedAt, datetime('now'))");
 }
 
 const parse = (row) => ({
@@ -78,7 +122,7 @@ export const newId = () =>
 /* ── items ─────────────────────────────────────────────── */
 export async function listItems() {
   const db = await getDb();
-  const rows = await db.getAllAsync('SELECT * FROM items ORDER BY createdAt DESC');
+  const rows = await db.getAllAsync('SELECT * FROM items WHERE deletedAt IS NULL ORDER BY createdAt DESC');
   return rows.map(parse);
 }
 
@@ -87,7 +131,7 @@ export async function listItems() {
 export async function getItemNumber(id) {
   const db = await getDb();
   const row = await db.getFirstAsync(
-    'SELECT COUNT(*) as n FROM items WHERE createdAt <= (SELECT createdAt FROM items WHERE id = ?)',
+    'SELECT COUNT(*) as n FROM items WHERE deletedAt IS NULL AND createdAt <= (SELECT createdAt FROM items WHERE id = ?)',
     id
   );
   return row ? row.n : 1;
@@ -95,7 +139,7 @@ export async function getItemNumber(id) {
 
 export async function getItem(id) {
   const db = await getDb();
-  const row = await db.getFirstAsync('SELECT * FROM items WHERE id = ?', id);
+  const row = await db.getFirstAsync('SELECT * FROM items WHERE id = ? AND deletedAt IS NULL', id);
   return row ? parse(row) : null;
 }
 
@@ -119,14 +163,15 @@ export async function insertItem(item) {
     wears: item.wears || 0,
     lastWorn: item.lastWorn || null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await db.runAsync(
     `INSERT INTO items
-      (id,name,brand,category,color,colorName,material,seasons,formality,tags,price,imageUri,sourceUrl,status,wears,lastWorn,createdAt)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      (id,name,brand,category,color,colorName,material,seasons,formality,tags,price,imageUri,sourceUrl,status,wears,lastWorn,createdAt,updatedAt)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     row.id, row.name, row.brand, row.category, row.color, row.colorName, row.material,
     row.seasons, row.formality, row.tags, row.price, row.imageUri, row.sourceUrl,
-    row.status, row.wears, row.lastWorn, row.createdAt
+    row.status, row.wears, row.lastWorn, row.createdAt, row.updatedAt
   );
   return parse(row);
 }
@@ -136,6 +181,7 @@ export async function updateItem(id, patch) {
   const clean = { ...patch };
   if (clean.seasons) clean.seasons = JSON.stringify(clean.seasons);
   if (clean.tags) clean.tags = JSON.stringify(clean.tags);
+  clean.updatedAt = new Date().toISOString();
   const keys = Object.keys(clean);
   if (!keys.length) return;
   await db.runAsync(
@@ -144,9 +190,15 @@ export async function updateItem(id, patch) {
   );
 }
 
+/**
+ * Soft delete. A removed piece has to stay as a tombstone or the other device
+ * would push it straight back on the next sync. Reads filter these out, and
+ * the row is only really gone once every device has seen the deletion.
+ */
 export async function deleteItem(id) {
   const db = await getDb();
-  await db.runAsync('DELETE FROM items WHERE id = ?', id);
+  const now = new Date().toISOString();
+  await db.runAsync('UPDATE items SET deletedAt = ?, updatedAt = ? WHERE id = ?', now, now, id);
 }
 
 export async function markWorn(itemIds, date) {
@@ -154,8 +206,8 @@ export async function markWorn(itemIds, date) {
   await db.withTransactionAsync(async () => {
     for (const id of itemIds) {
       await db.runAsync(
-        'UPDATE items SET wears = wears + 1, status = ?, lastWorn = ? WHERE id = ?',
-        'dirty', date, id
+        'UPDATE items SET wears = wears + 1, status = ?, lastWorn = ?, updatedAt = ? WHERE id = ?',
+        'dirty', date, new Date().toISOString(), id
       );
     }
   });
@@ -163,7 +215,10 @@ export async function markWorn(itemIds, date) {
 
 export async function washAll() {
   const db = await getDb();
-  await db.runAsync("UPDATE items SET status = 'clean' WHERE status IN ('dirty','laundry')");
+  await db.runAsync(
+    "UPDATE items SET status = 'clean', updatedAt = ? WHERE status IN ('dirty','laundry')",
+    new Date().toISOString()
+  );
 }
 
 /* ── settings ──────────────────────────────────────────── */
@@ -177,8 +232,9 @@ export async function getSetting(key, fallback = null) {
 export async function setSetting(key, value) {
   const db = await getDb();
   await db.runAsync(
-    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    key, JSON.stringify(value)
+    `INSERT INTO settings (key, value, updatedAt) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt`,
+    key, JSON.stringify(value), new Date().toISOString()
   );
 }
 
@@ -186,14 +242,15 @@ export async function setSetting(key, value) {
 export async function addWearLog(entry) {
   const db = await getDb();
   await db.runAsync(
-    'INSERT INTO wear_log (date, occasion, name, itemIds, weather) VALUES (?,?,?,?,?)',
-    entry.date, entry.occasion, entry.name, JSON.stringify(entry.itemIds), entry.weather || ''
+    'INSERT INTO wear_log (uid, date, occasion, name, itemIds, weather, updatedAt) VALUES (?,?,?,?,?,?,?)',
+    newId(), entry.date, entry.occasion, entry.name,
+    JSON.stringify(entry.itemIds), entry.weather || '', new Date().toISOString()
   );
 }
 
 export async function listWearLog(limit = 60) {
   const db = await getDb();
-  const rows = await db.getAllAsync('SELECT * FROM wear_log ORDER BY id DESC LIMIT ?', limit);
+  const rows = await db.getAllAsync('SELECT * FROM wear_log WHERE deletedAt IS NULL ORDER BY id DESC LIMIT ?', limit);
   return rows.map((r) => ({ ...r, itemIds: JSON.parse(r.itemIds || '[]') }));
 }
 
@@ -201,14 +258,15 @@ export async function listWearLog(limit = 60) {
 export async function addFeedback(f) {
   const db = await getDb();
   await db.runAsync(
-    'INSERT INTO feedback (ts, occasion, verdict, itemNames, itemIds) VALUES (?,?,?,?,?)',
-    new Date().toISOString(), f.occasion, f.verdict, JSON.stringify(f.itemNames), JSON.stringify(f.itemIds || [])
+    'INSERT INTO feedback (uid, ts, occasion, verdict, itemNames, itemIds, updatedAt) VALUES (?,?,?,?,?,?,?)',
+    newId(), new Date().toISOString(), f.occasion, f.verdict,
+    JSON.stringify(f.itemNames), JSON.stringify(f.itemIds || []), new Date().toISOString()
   );
 }
 
 export async function recentFeedback(limit = 8) {
   const db = await getDb();
-  const rows = await db.getAllAsync('SELECT * FROM feedback ORDER BY id DESC LIMIT ?', limit);
+  const rows = await db.getAllAsync('SELECT * FROM feedback WHERE deletedAt IS NULL ORDER BY id DESC LIMIT ?', limit);
   return rows.map((r) => ({
     ...r,
     itemNames: JSON.parse(r.itemNames || '[]'),
@@ -220,14 +278,15 @@ export async function recentFeedback(limit = 8) {
 export async function saveOutfit(o) {
   const db = await getDb();
   await db.runAsync(
-    'INSERT INTO saved_outfits (ts, name, occasion, itemIds) VALUES (?,?,?,?)',
-    new Date().toISOString(), o.name, o.occasion, JSON.stringify(o.itemIds)
+    'INSERT INTO saved_outfits (uid, ts, name, occasion, itemIds, updatedAt) VALUES (?,?,?,?,?,?)',
+    newId(), new Date().toISOString(), o.name, o.occasion,
+    JSON.stringify(o.itemIds), new Date().toISOString()
   );
 }
 
 export async function listSavedOutfits() {
   const db = await getDb();
-  const rows = await db.getAllAsync('SELECT * FROM saved_outfits ORDER BY id DESC');
+  const rows = await db.getAllAsync('SELECT * FROM saved_outfits WHERE deletedAt IS NULL ORDER BY id DESC');
   return rows.map((r) => ({ ...r, itemIds: JSON.parse(r.itemIds || '[]') }));
 }
 
