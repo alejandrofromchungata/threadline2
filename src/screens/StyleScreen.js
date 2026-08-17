@@ -87,7 +87,7 @@ function ValueRow({ label, value, onPress, pill }) {
 
 export default function StyleScreen({ onReset }) {
   const { T, mode, setMode } = useTheme();
-  const { profile: account, configured, signOut, syncing, lastSyncError, runSync } = useAuth();
+  const { profile: account, configured, signOut, syncing, lastSyncError, runSync, deleteAccount } = useAuth();
   const st = useMemo(() => makeStyles(T), [T]);
   const [profile, setProfile] = useState({ styles: [], contexts: [], customStyles: [], customContexts: [] });
   const [learned, setLearned] = useState([]);
@@ -136,6 +136,41 @@ export default function StyleScreen({ onReset }) {
     } catch {
       Alert.alert('No mail app set up', `Send feedback to ${FEEDBACK_EMAIL}`);
     }
+  };
+
+  // Two steps on purpose. This is irreversible and takes the cloud copy and
+  // the phone's copy with it, so a single mis-tap must not be enough.
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      `This removes @${account?.username} and every piece, wear and setting — from this phone and from your account. It cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => Alert.alert(
+            'Last chance',
+            'Your wardrobe will be permanently deleted. There is no way to get it back.',
+            [
+              { text: 'Keep my account', style: 'cancel' },
+              {
+                text: 'Delete permanently',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await deleteAccount();
+                    onReset();
+                  } catch (e) {
+                    Alert.alert('Could not delete', e.message || 'Something went wrong.');
+                  }
+                },
+              },
+            ],
+          ),
+        },
+      ],
+    );
   };
 
   const confirmSignOut = () => {
@@ -427,6 +462,20 @@ export default function StyleScreen({ onReset }) {
         </SettingsCard>
 
         <Button title="Erase All Local Wardrobe Data" variant="danger" style={{ marginTop: 4 }} onPress={reset} />
+        {configured && !!account && (
+          <>
+            <Button
+              title="Delete Account"
+              variant="danger"
+              style={{ marginTop: 10 }}
+              onPress={confirmDeleteAccount}
+            />
+            <Hint style={{ marginTop: 8 }}>
+              Erasing clears this phone only. Deleting your account also removes the copy stored
+              against @{account.username}.
+            </Hint>
+          </>
+        )}
         </>
         )}
       </ScrollView>

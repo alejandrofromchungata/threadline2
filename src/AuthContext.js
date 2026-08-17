@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState } from 'react-native';
 import { supabase, isAuthConfigured } from './services/supabase';
 import { syncNow, hasSyncedBefore } from './services/sync';
+import { wipeAll } from './db';
 
 const AuthContext = createContext({
   session: null,
@@ -105,6 +106,19 @@ export function AuthProvider({ children }) {
     signOut: async () => {
       syncedThisSession.current = false;
       await supabase?.auth.signOut();
+    },
+    /**
+     * Remove the account and everything attached to it. The server cascade
+     * clears the cloud copy; the local database is wiped separately, because
+     * a deleted account that left the wardrobe sitting on the phone would not
+     * be a deletion in any sense the user would recognise.
+     */
+    deleteAccount: async () => {
+      const { error } = await supabase.rpc('delete_own_account');
+      if (error) throw new Error(error.message);
+      syncedThisSession.current = false;
+      await wipeAll();
+      await supabase.auth.signOut();
     },
   }), [session, profile, ready, loadProfile, syncing, lastSyncError, runSync]);
 
