@@ -12,7 +12,7 @@ import { Button, Field, Hint, Micro, Row, Banner } from '../components/ui';
 import Garment from '../components/Garment';
 import { tagPhoto, readProduct, tagProduct, findProduct } from '../api';
 import { prepareForUpload, removeBackgroundToCloset, saveRemoteCutout, deleteImage } from '../services/images';
-import { insertItem, newId } from '../db';
+import { insertItem, updateItem, getItem, newId } from '../db';
 import { CATEGORIES, SEASONS, FORMALITY, FONTS, formalityDots } from '../theme';
 import { useTheme } from '../ThemeContext';
 
@@ -53,23 +53,36 @@ export default function AddItemScreen({ navigation, route }) {
   const [manualEntry, setManualEntry] = useState(false);
   const [pendingId] = useState(newId());
 
+  // Opened from a garment's detail screen to correct its catalogue entry.
+  // Editing has to be non-destructive: the row keeps its wear count, price
+  // history and photo, so nothing here may delete the image or re-insert.
+  const editId = route.params?.editId ?? null;
+  useEffect(() => {
+    if (editId) getItem(editId).then((row) => { if (row) setDraft(row); });
+  }, [editId]);
+
   // Figma gives each add-flow its own nav-bar wording: the blank manual form
   // stays "Add Garment / MANUAL ENTRY", while a draft parsed from a photo,
   // link or search becomes "Verify Care Label".
-  const headerTitle = draft
-    ? (manualEntry ? 'Add Garment' : 'Verify Care Label')
-    : (mode === 'search' ? 'Search Wardrobe' : 'Add Garment');
-  const headerMeta = draft
-    ? (manualEntry ? 'MANUAL ENTRY' : null)
-    : (mode === 'link' ? 'ADD FLOW' : null);
-  const backLabel = draft || mode === 'link' ? 'Back' : 'Closet';
+  const headerTitle = editId
+    ? 'Edit Garment'
+    : draft
+      ? (manualEntry ? 'Add Garment' : 'Verify Care Label')
+      : (mode === 'search' ? 'Search Wardrobe' : 'Add Garment');
+  const headerMeta = editId
+    ? 'EDITING'
+    : draft
+      ? (manualEntry ? 'MANUAL ENTRY' : null)
+      : (mode === 'link' ? 'ADD FLOW' : null);
+  const backLabel = editId || draft || mode === 'link' ? 'Back' : 'Closet';
 
   return (
     <SafeAreaView style={a.safe} edges={['top', 'bottom']}>
       <View style={a.head}>
         <Pressable
           onPress={async () => {
-            if (draft) { await deleteImage(draft.imageUri); setDraft(null); setManualEntry(false); }
+            if (editId) navigation.goBack();
+            else if (draft) { await deleteImage(draft.imageUri); setDraft(null); setManualEntry(false); }
             else navigation.goBack();
           }}
           style={a.backLink}
@@ -123,12 +136,23 @@ export default function AddItemScreen({ navigation, route }) {
         <DraftForm
           draft={draft}
           setDraft={setDraft}
+          editing={!!editId}
           onDiscard={async () => {
+            // Editing an existing piece: leave the row and its photo alone.
+            if (editId) { navigation.goBack(); return; }
             await deleteImage(draft.imageUri);
             setDraft(null);
             setManualEntry(false);
           }}
           onSave={async () => {
+            if (editId) {
+              // Patch the catalogue fields only. wears, lastWorn, status and
+              // createdAt stay untouched, so the wear history survives an edit.
+              const { id, wears, lastWorn, status, createdAt, ...fields } = draft;
+              await updateItem(editId, fields);
+              navigation.goBack();
+              return;
+            }
             // The row id is generated at insert time. pendingId names the image
             // file only — reusing it as the row id collides on a second save.
             await insertItem({ ...draft });
@@ -517,7 +541,7 @@ function SearchFlow({ itemId, onReady }) {
 }
 
 /* ── Confirm / edit before saving ────────────────────────── */
-function DraftForm({ draft, setDraft, onSave, onDiscard }) {
+function DraftForm({ draft, setDraft, onSave, onDiscard, editing }) {
   const { T } = useTheme();
   const a = useMemo(() => makeStyles(T), [T]);
   const [saving, setSaving] = useState(false);
@@ -646,9 +670,14 @@ function DraftForm({ draft, setDraft, onSave, onDiscard }) {
         </View>
       </View>
 
-      <Button title="Add to Closet" busy={saving} onPress={save} style={{ marginTop: 16 }} />
+      <Button
+        title={editing ? 'Save Changes' : 'Add to Closet'}
+        busy={saving}
+        onPress={save}
+        style={{ marginTop: 16 }}
+      />
       <Pressable onPress={onDiscard} style={a.backEdit}>
-        <Text style={a.backEditText}>Back to edit</Text>
+        <Text style={a.backEditText}>{editing ? 'Discard changes' : 'Back to edit'}</Text>
       </Pressable>
     </ScrollView>
   );

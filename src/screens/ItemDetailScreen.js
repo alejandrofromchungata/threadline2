@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -8,6 +8,7 @@ import { Micro } from '../components/ui';
 import { getItem, getItemNumber, updateItem, deleteItem } from '../db';
 import { deleteImage } from '../services/images';
 import { getStatus, formalityDots, FORMALITY, FONTS } from '../theme';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../ThemeContext';
 
 const STATUS_ORDER = ['clean', 'dirty', 'laundry', 'storage'];
@@ -23,10 +24,13 @@ export default function ItemDetailScreen({ route, navigation }) {
   const [item, setItem] = useState(null);
   const [number, setNumber] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     getItem(id).then(setItem);
     getItemNumber(id).then(setNumber);
   }, [id]);
+
+  // Refetch on focus, so returning from the edit form shows the new values.
+  useFocusEffect(load);
 
   if (!item) return <SafeAreaView style={d.safe} />;
 
@@ -63,7 +67,17 @@ export default function ItemDetailScreen({ route, navigation }) {
           <BackArrow color={T.ink} />
           <Text style={d.backText}>Closet</Text>
         </Pressable>
-        <Text style={d.catalogNumber}>{`NO. ${String(number || 1).padStart(4, '0')}`}</Text>
+        <View style={d.navRight}>
+          <Pressable
+            onPress={() => navigation.navigate('AddItem', { editId: id })}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit this piece"
+          >
+            <Text style={d.editLink}>Edit</Text>
+          </Pressable>
+          <Text style={d.catalogNumber}>{`NO. ${String(number || 1).padStart(4, '0')}`}</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -163,7 +177,9 @@ const makeStyles = (T) => StyleSheet.create({
   },
   backLink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   backText: { fontFamily: FONTS.sans, fontSize: 14, color: T.ink },
-  catalogNumber: { fontFamily: FONTS.monoSemi, fontSize: 14, color: T.muted },
+  navRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  editLink: { fontFamily: FONTS.sansSemi, fontSize: 14, lineHeight: 18, color: T.indigo },
+  catalogNumber: { fontFamily: FONTS.monoSemi, fontSize: 14, lineHeight: 18, color: T.muted },
   imageBlock: {
     height: 280, alignItems: 'center', justifyContent: 'center', backgroundColor: T.heroBg,
     borderBottomWidth: 1, borderColor: T.seam,
