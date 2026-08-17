@@ -28,7 +28,8 @@
         "NSPhotoLibraryUsageDescription": "Threadline reads photos you choose so you can add existing clothing pictures to your closet.",
         "NSLocationWhenInUseUsageDescription": "Threadline checks your local forecast so outfit suggestions suit the weather.",
         "NSCalendarsFullAccessUsageDescription": "Threadline reads upcoming event titles to suggest outfits for what you have on."
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.yourcompany.threadline",
@@ -72,7 +73,8 @@
           "disableIOS": true
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-apple-authentication"
     ],
     "web": {
       "bundler": "metro",
@@ -82,7 +84,9 @@
       "apiBaseUrl": "https://threadline-api.theapp-threadline.workers.dev",
       "eas": {
         "projectId": "62217c40-b293-4f1e-89c4-18eb7c2145b8"
-      }
+      },
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
     },
     "privacy": "public"
   }

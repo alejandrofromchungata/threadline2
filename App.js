@@ -28,6 +28,9 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import { getDb, getSetting } from './src/db';
 import { FONTS } from './src/theme';
 import { ThemeProvider, useTheme } from './src/ThemeContext';
+import { AuthProvider, useAuth } from './src/AuthContext';
+import SignInScreen from './src/screens/SignInScreen';
+import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -59,13 +62,16 @@ function AddTabButton({ onPress }) {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }
 
 function AppContent() {
   const { T, isDark } = useTheme();
+  const { ready: authReady, configured, session, needsProfile } = useAuth();
   const [ready, setReady] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({ resetOnBackground: true });
@@ -128,7 +134,7 @@ function AppContent() {
     },
   }), [T, isDark]);
 
-  if (!ready || !fontsLoaded) {
+  if (!ready || !fontsLoaded || !authReady) {
     return (
       <View style={app.boot}>
         <ActivityIndicator color={T.indigo} />
@@ -141,7 +147,18 @@ function AppContent() {
     <SafeAreaProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <NavigationContainer ref={navRef} theme={navTheme}>
-        {!hasProfile ? (
+        {/* Accounts are gated ahead of onboarding. When the project keys are
+            absent the app runs signed-out exactly as before, so a missing
+            config can never lock anyone out of their own wardrobe. */}
+        {configured && !session ? (
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="SignIn" component={SignInScreen} />
+          </Stack.Navigator>
+        ) : configured && needsProfile ? (
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+          </Stack.Navigator>
+        ) : !hasProfile ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Onboarding">
               {(props) => <OnboardingScreen {...props} onDone={() => setHasProfile(true)} />}

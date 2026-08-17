@@ -14,6 +14,7 @@ import { API_BASE } from '../api';
 import { STYLES, CONTEXTS, SORTS, FONTS } from '../theme';
 import Constants from 'expo-constants';
 import { useTheme } from '../ThemeContext';
+import { useAuth } from '../AuthContext';
 
 const TABS = [['preferences', 'Preferences'], ['settings', 'Settings']];
 
@@ -86,6 +87,7 @@ function ValueRow({ label, value, onPress, pill }) {
 
 export default function StyleScreen({ onReset }) {
   const { T, mode, setMode } = useTheme();
+  const { profile: account, configured, signOut } = useAuth();
   const st = useMemo(() => makeStyles(T), [T]);
   const [profile, setProfile] = useState({ styles: [], contexts: [], customStyles: [], customContexts: [] });
   const [learned, setLearned] = useState([]);
@@ -129,6 +131,14 @@ export default function StyleScreen({ onReset }) {
     } catch {
       Alert.alert('No mail app set up', `Send feedback to ${FEEDBACK_EMAIL}`);
     }
+  };
+
+  const confirmSignOut = () => {
+    Alert.alert(
+      'Sign out?',
+      'Your wardrobe stays on this phone. Sign back in to reach it from anywhere.',
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', onPress: signOut }],
+    );
   };
 
   const exportCsv = async () => {
@@ -233,7 +243,17 @@ export default function StyleScreen({ onReset }) {
         {tab === 'preferences' && (
         <>
         <View style={st.profileHeader}>
-          <View style={st.avatar}><NeedleIcon color={T.indigo} /></View>
+          <View style={st.avatar}>
+            {account?.display_name
+              ? <Text style={st.avatarInitial}>{account.display_name.trim()[0].toUpperCase()}</Text>
+              : <NeedleIcon color={T.indigo} />}
+          </View>
+          {!!account && (
+            <>
+              <Text style={st.accountName}>{account.display_name}</Text>
+              <Micro>{`@${account.username}`}</Micro>
+            </>
+          )}
           <Hint style={{ textAlign: 'center', marginTop: 4 }}>
             These preferences weight every suggestion. Your thumbs up and down adjust them further.
           </Hint>
@@ -339,6 +359,16 @@ export default function StyleScreen({ onReset }) {
 
         {tab === 'settings' && (
         <>
+        {configured && !!account && (
+          <SettingsCard label="Account" caption="Signed in to Threadline">
+            <ValueRow label="Display name" value={account.display_name} />
+            <ValueRow label="Username" value={`@${account.username}`} />
+            <Pressable onPress={confirmSignOut} style={st.dashedBtn} accessibilityRole="button">
+              <Text style={st.dashedBtnText}>SIGN OUT</Text>
+            </Pressable>
+          </SettingsCard>
+        )}
+
         <SettingsCard label="Notifications" caption="Tailored workroom alerts">
           <ToggleRow
             label="Laundry reminders"
@@ -438,6 +468,8 @@ const makeStyles = (T) => StyleSheet.create({
     padding: 12, gap: 4,
   },
   statValue: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  avatarInitial: { fontFamily: FONTS.display, fontSize: 34, lineHeight: 45, color: T.indigo },
+  accountName: { fontFamily: FONTS.display, fontSize: 28, lineHeight: 37, color: T.ink, marginTop: 12 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   editLink: { fontFamily: FONTS.sans, fontSize: 13, color: T.indigo },
   reactionCard: {
