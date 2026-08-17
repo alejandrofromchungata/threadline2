@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -68,9 +68,11 @@ export default function LogScreen({ navigation }) {
   return (
     <SafeAreaView style={l.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        <View style={l.head}>
+        {/* Figma's nav-bar also has a Back link, but Log is a tab root so
+            there is nothing to go back to. */}
+        <View style={l.navBar}>
           <Text style={l.title}>Wardrobe Log & Metrics</Text>
-          <Micro>{log.length} days recorded</Micro>
+          <Micro strong>Closet statistics</Micro>
         </View>
 
         {dirty.length > 0 && (
@@ -82,22 +84,28 @@ export default function LogScreen({ navigation }) {
               <Text style={l.laundryHint} numberOfLines={2}>
                 {dirty.slice(0, 3).map((i) => i.name).join(', ')}{dirty.length > 3 ? '…' : ''}
               </Text>
-              <Button title="Mark All Clean" onPress={wash} style={{ paddingVertical: 8, paddingHorizontal: 12, minHeight: 0 }} />
+              <Pressable
+                onPress={wash}
+                accessibilityRole="button"
+                style={({ pressed }) => [l.washBtn, pressed && { opacity: 0.82 }]}
+              >
+                <Text style={l.washBtnText}>Mark All Clean</Text>
+              </Pressable>
             </View>
           </View>
         )}
 
         <View style={l.statsRow}>
           <View style={l.statCard}>
-            <Micro>Closet value</Micro>
+            <Text style={l.statLabel}>CLOSET VALUE</Text>
             <Text style={l.statValue}>{Math.round(totalSpend)}</Text>
           </View>
           <View style={l.statCard}>
-            <Micro>Total wears</Micro>
+            <Text style={l.statLabel}>TOTAL WEARS</Text>
             <Text style={l.statValue}>{totalWears}</Text>
           </View>
           <View style={l.statCard}>
-            <Micro>Avg CPW</Micro>
+            <Text style={l.statLabel}>AVG CPW</Text>
             <Text style={l.statValue}>{totalWears ? (totalSpend / totalWears).toFixed(2) : '—'}</Text>
           </View>
         </View>
@@ -177,8 +185,11 @@ export default function LogScreen({ navigation }) {
 
 const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
-  head: { marginBottom: 16, gap: 4 },
-  title: { fontFamily: FONTS.display, fontSize: 22, color: T.ink },
+  navBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    gap: 12, marginBottom: 16,
+  },
+  title: { fontFamily: FONTS.display, fontSize: 18, lineHeight: 24, color: T.ink },
   count: { fontSize: 11, color: T.muted },
   laundryCard: {
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
@@ -187,13 +198,20 @@ const makeStyles = (T) => StyleSheet.create({
   laundryTitle: { fontFamily: FONTS.display, fontSize: 22, color: T.ink },
   hr: { height: 1, backgroundColor: T.seam },
   laundryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  laundryHint: { flex: 1, fontFamily: FONTS.sans, fontSize: 13, color: T.muted },
+  laundryHint: { flex: 1, fontFamily: FONTS.sans, fontSize: 13, lineHeight: 17, color: T.muted },
+  // Figma's btn-wash: a compact indigo pill, not the full-size primary button.
+  washBtn: {
+    backgroundColor: T.indigo, borderRadius: 100,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
+  washBtnText: { fontFamily: FONTS.sansSemi, fontSize: 12, lineHeight: 16, color: '#fff' },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   statCard: {
     flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
     padding: 12, gap: 4,
   },
-  statValue: { fontFamily: FONTS.display, fontSize: 22, color: T.indigo },
+  statValue: { fontFamily: FONTS.display, fontSize: 22, lineHeight: 29, color: T.indigo },
+  statLabel: { fontFamily: FONTS.mono, fontSize: 9, lineHeight: 12, color: T.muted },
   wornRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, marginBottom: 8,
     backgroundColor: T.card, borderWidth: 1, borderColor: T.seam, borderRadius: 8,
@@ -214,7 +232,7 @@ const makeStyles = (T) => StyleSheet.create({
     borderBottomWidth: 1, borderColor: T.seam, borderStyle: 'dashed',
   },
   statName: { fontSize: 13, color: T.ink, flex: 1 },
-  statVal: { fontSize: 11, color: T.muted },
+  statVal: { fontFamily: FONTS.mono, fontSize: 11, lineHeight: 14, color: T.muted },
   gapCard: {
     backgroundColor: T.paper, borderWidth: 2, borderColor: T.indigo, borderRadius: 8,
     padding: 16, gap: 8,
