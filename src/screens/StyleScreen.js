@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, Linking, Pressable, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -8,9 +8,15 @@ import Garment from '../components/Garment';
 import { Button, Chip, Row, Stitch, Hint, Micro } from '../components/ui';
 import ChipPicker from '../components/ChipPicker';
 import { getSetting, setSetting, wipeAll, recentFeedback, listItems, listWearLog } from '../db';
+import { cancelLaundryReminder } from '../services/notifications';
 import { API_BASE } from '../api';
 import { STYLES, CONTEXTS, FONTS } from '../theme';
+import Constants from 'expo-constants';
 import { useTheme } from '../ThemeContext';
+
+const TABS = [['preferences', 'Preferences'], ['settings', 'Settings']];
+
+const appVersion = Constants.expoConfig?.version || '1.0.0';
 
 const APPEARANCE_OPTIONS = [
   ['system', 'Match phone'],
@@ -35,6 +41,16 @@ export default function StyleScreen({ onReset }) {
   const [wornCount, setWornCount] = useState(0);
   const [editingStyles, setEditingStyles] = useState(false);
   const [editingContexts, setEditingContexts] = useState(false);
+  const [tab, setTab] = useState('preferences');
+  const [laundryReminders, setLaundryRemindersState] = useState(true);
+
+  // Persisted so the outfit flow can honour it when it would otherwise
+  // schedule a reminder — this toggle changes real behaviour, not just UI.
+  const setLaundryReminders = async (on) => {
+    setLaundryRemindersState(on);
+    await setSetting('laundryReminders', on);
+    if (!on) await cancelLaundryReminder();
+  };
 
   const load = useCallback(async () => {
     const [saved, feedback, closet, log] = await Promise.all([
@@ -44,6 +60,7 @@ export default function StyleScreen({ onReset }) {
     setLearned(feedback);
     setItems(closet);
     setWornCount(log.length);
+    setLaundryRemindersState(await getSetting('laundryReminders', true));
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -92,15 +109,31 @@ export default function StyleScreen({ onReset }) {
 
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-        {/* Figma's nav-bar also carries a Back link, but this screen is a tab
-            root — there is nothing to go back to, so only the title and the
-            PREFERENCES marker carry over. */}
-        <View style={st.navBar}>
-          <Text style={st.title}>Style Profile</Text>
-          <Micro strong>Preferences</Micro>
-        </View>
+      {/* Figma's nav-bar also carries a Back link, but this screen is a tab
+          root — there is nothing to go back to. */}
+      <View style={st.navBar}>
+        <Text style={st.title}>Style Profile</Text>
+        <Micro strong>{tab === 'preferences' ? 'Preferences' : 'Settings'}</Micro>
+      </View>
 
+      {/* Same control as the add flow's Photo / Search / Link / Manual. */}
+      <View style={st.seg}>
+        {TABS.map(([k, label]) => (
+          <Pressable
+            key={k}
+            onPress={() => setTab(k)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: tab === k }}
+            style={[st.segBtn, tab === k && st.segOn]}
+          >
+            <Text style={[st.segText, tab === k && st.segTextOn]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
+        {tab === 'preferences' && (
+        <>
         <View style={st.profileHeader}>
           <View style={st.avatar}><NeedleIcon color={T.indigo} /></View>
           <Hint style={{ textAlign: 'center', marginTop: 4 }}>
@@ -203,6 +236,25 @@ export default function StyleScreen({ onReset }) {
           ))}
         </Row>
 
+        </>
+        )}
+
+        {tab === 'settings' && (
+        <>
+        <Stitch label="NOTIFICATIONS" />
+        <View style={st.settingRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={st.settingLabel}>Laundry reminders</Text>
+            <Hint>Nudge me when the worn pile is worth a wash.</Hint>
+          </View>
+          <Switch
+            value={laundryReminders}
+            onValueChange={setLaundryReminders}
+            trackColor={{ false: T.seam, true: T.indigo }}
+            thumbColor="#fff"
+          />
+        </View>
+
         <Stitch label="YOUR DATA & PRIVACY" />
         <View style={st.privacyCard}>
           <Micro>Wardrobe data & sources</Micro>
@@ -218,6 +270,14 @@ export default function StyleScreen({ onReset }) {
           </Pressable>
         </View>
         <Button title="Erase All Local Wardrobe Data" variant="danger" style={{ marginTop: 12 }} onPress={reset} />
+
+        <Stitch label="ABOUT" />
+        <View style={st.settingRow}>
+          <Text style={st.settingLabel}>Version</Text>
+          <Text style={st.settingValue}>{appVersion}</Text>
+        </View>
+        </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -227,8 +287,23 @@ const makeStyles = (T) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: T.paper },
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 16,
+    paddingHorizontal: 20, paddingVertical: 12,
   },
+  seg: {
+    flexDirection: 'row', marginHorizontal: 20, backgroundColor: T.card,
+    borderWidth: 1, borderColor: T.seam, borderRadius: 100, padding: 4, gap: 2,
+    marginVertical: 8,
+  },
+  segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 100 },
+  segOn: { backgroundColor: T.indigo },
+  segText: { fontFamily: FONTS.sansMedium, fontSize: 14, lineHeight: 18, color: T.muted },
+  segTextOn: { fontFamily: FONTS.sansSemi, color: '#fff' },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12, gap: 12,
+  },
+  settingLabel: { fontFamily: FONTS.sansSemi, fontSize: 15, lineHeight: 20, color: T.ink },
+  settingValue: { fontFamily: FONTS.mono, fontSize: 13, lineHeight: 17, color: T.muted },
   title: { fontFamily: FONTS.display, fontSize: 18, lineHeight: 24, color: T.ink },
   profileHeader: { alignItems: 'center', marginBottom: 16 },
   avatar: {

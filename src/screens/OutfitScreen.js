@@ -130,7 +130,7 @@ export default function OutfitScreen() {
     const fresh = await listItems();
     setItems(fresh);
     const dirty = fresh.filter((i) => i.status === 'dirty');
-    if (dirty.length >= 8) {
+    if (dirty.length >= 8 && (await getSetting('laundryReminders', true))) {
       const cats = [...new Set(dirty.map((i) => i.category))].slice(0, 2);
       scheduleLaundryReminder(dirty.length, cats).catch(() => {});
     }
